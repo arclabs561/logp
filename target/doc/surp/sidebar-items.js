@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Error"],"fn":["conditional_entropy","cross_entropy","distinct_count","entropy","fingerprint","good_turing_unseen_mass","js_divergence","kl_divergence","mutual_information","normalized_mutual_information"],"mod":["entropy_calibration","fdiv","unseen","zipf"],"type":["Result"]};

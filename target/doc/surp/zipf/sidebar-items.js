@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ZipfError"],"fn":["data_factor_to_halve_singletons","singleton_mass_scaling_exponent","zipf_fit_from_counts"],"struct":["ZipfFit"]};

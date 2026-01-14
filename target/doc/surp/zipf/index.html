@@ -1,0 +1,47 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Zipf / power-law tails"><title>surp::zipf - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-e56847b5.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="surp" data-themes="" data-resource-suffix="" data-rustdoc-version="1.91.1 (ed61e7d7e 2025-11-07)" data-channel="1.91.1" data-search-js="search-e256b49e.js" data-stringdex-js="stringdex-c3e638e9.js" data-settings-js="settings-c38705f0.js" ><script src="../../static.files/storage-e2aeef58.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-6dc2a7f3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Module zipf</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../surp/index.html">surp</a><span class="version">0.1.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module zipf</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#zipf--power-law-tails" title="Zipf / power-law tails">Zipf / power-law tails</a><ul><li><a href="#scaling-law-proposition-31" title="Scaling Law (Proposition 3.1)">Scaling Law (Proposition 3.1)</a></li><li><a href="#what-this-module-does" title="What this module does">What this module does</a></li></ul></li><li><a href="#examples" title="Examples">Examples</a></li></ul><h3><a href="#structs">Module Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#enums" title="Enums">Enums</a></li><li><a href="#functions" title="Functions">Functions</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="../index.html">In crate surp</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">surp</a></div><h1>Module <span>zipf</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/surp/zipf.rs.html#1-304">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="zipf--power-law-tails"><a class="doc-anchor" href="#zipf--power-law-tails">§</a>Zipf / power-law tails</h2>
+<p>A lot of discrete data (text tokens, code tokens, entity IDs) has heavy tails.
+A simple model is a Zipf law:</p>
+<div class="example-wrap"><pre class="language-text"><code>f(r) ≈ C / r^α
+
+where:
+  r = rank (1 = most frequent)
+  f(r) = frequency (or probability mass)
+  α = power-law exponent (&quot;tail heaviness&quot;)</code></pre></div>
+<p>This matters because heavy tails create persistent “rare events”. In the entropy calibration
+paper (Cao, Valiant, Liang 2025), the tail exponent is linked to how quickly generation
+instability improves with scale: α close to 1 implies very slow improvement.</p>
+<h3 id="scaling-law-proposition-31"><a class="doc-anchor" href="#scaling-law-proposition-31">§</a>Scaling Law (Proposition 3.1)</h3>
+<p>For a distribution with power-law exponent α, the probability of generating a “singleton”
+(token seen exactly once during training) scales with training set size m as:</p>
+<div class="example-wrap"><pre class="language-text"><code>E[singleton mass] ∼ m^(1/α - 1)</code></pre></div>
+<p>Important nuances:</p>
+<ul>
+<li>The proposition is derived in a <strong>simplified setting</strong> (unigram-like rare-event model).</li>
+<li>For an <em>infinite</em> Zipf distribution, normalizability requires <strong>α &gt; 1</strong>. In practice,
+people fit α on a finite rank range (e.g. top 5k unigrams), and those fitted values can be
+&lt; 1 without implying a true infinite-vocabulary Zipf law.</li>
+</ul>
+<p>The entropy-calibration paper reports fitted α values that are <strong>near 1 for text</strong> and <strong>larger
+for code</strong>, which is consistent with the observed “slow scaling” for text and “faster scaling”
+for code — but this is evidence, not a theorem about all corpora or tokenizations.</p>
+<h3 id="what-this-module-does"><a class="doc-anchor" href="#what-this-module-does">§</a>What this module does</h3>
+<p>We provide a simple <em>diagnostic</em> fit of α by linear regression in log-log space:</p>
+<div class="example-wrap"><pre class="language-text"><code>log f(r) ≈ log C - α log r</code></pre></div>
+<p>This is not a gold-standard estimator (power laws are subtle), but it is often good enough to:</p>
+<ul>
+<li>compare corpora (text vs code),</li>
+<li>sanity-check tail heaviness, and</li>
+<li>monitor drift over time.</li>
+</ul>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>surp::zipf::zipf_fit_from_counts;
+
+<span class="comment">// Synthetic Zipf-like counts: count[r] ~ 1 / (r+1)^1.5
+</span><span class="kw">let </span>alpha_true = <span class="number">1.5</span>;
+<span class="kw">let </span>scale = <span class="number">1_000_000.0</span>;
+<span class="kw">let </span>counts: Vec&lt;usize&gt; = (<span class="number">1</span>..=<span class="number">5000</span>)
+    .map(|r| (scale / (r <span class="kw">as </span>f64).powf(alpha_true)).round() <span class="kw">as </span>usize)
+    .collect();
+
+<span class="kw">let </span>fit = zipf_fit_from_counts(<span class="kw-2">&amp;</span>counts, <span class="number">5</span>, <span class="number">5000</span>).unwrap().unwrap();
+<span class="macro">assert!</span>((fit.alpha - alpha_true).abs() &lt; <span class="number">0.1</span>);</code></pre></div></div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.ZipfFit.html" title="struct surp::zipf::ZipfFit">ZipfFit</a></dt><dd>Result of a log-log linear Zipf fit.</dd></dl><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><dl class="item-table"><dt><a class="enum" href="enum.ZipfError.html" title="enum surp::zipf::ZipfError">Zipf<wbr>Error</a></dt><dd>Errors returned by Zipf fitting helpers.</dd></dl><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><dl class="item-table"><dt><a class="fn" href="fn.data_factor_to_halve_singletons.html" title="fn surp::zipf::data_factor_to_halve_singletons">data_<wbr>factor_<wbr>to_<wbr>halve_<wbr>singletons</a></dt><dd>Estimate how much larger the training set needs to be to halve singleton mass.</dd><dt><a class="fn" href="fn.singleton_mass_scaling_exponent.html" title="fn surp::zipf::singleton_mass_scaling_exponent">singleton_<wbr>mass_<wbr>scaling_<wbr>exponent</a></dt><dd>Compute the singleton mass scaling exponent from Proposition 3.1.</dd><dt><a class="fn" href="fn.zipf_fit_from_counts.html" title="fn surp::zipf::zipf_fit_from_counts">zipf_<wbr>fit_<wbr>from_<wbr>counts</a></dt><dd>Fit a Zipf law exponent from raw token counts.</dd></dl></section></div></main></body></html>

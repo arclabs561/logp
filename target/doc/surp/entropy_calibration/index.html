@@ -1,0 +1,72 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Entropy calibration for generative models"><title>surp::entropy_calibration - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-e56847b5.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="surp" data-themes="" data-resource-suffix="" data-rustdoc-version="1.91.1 (ed61e7d7e 2025-11-07)" data-channel="1.91.1" data-search-js="search-e256b49e.js" data-stringdex-js="stringdex-c3e638e9.js" data-settings-js="settings-c38705f0.js" ><script src="../../static.files/storage-e2aeef58.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-6dc2a7f3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Module entropy_calibration</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../surp/index.html">surp</a><span class="version">0.1.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module entropy_<wbr>calibration</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#entropy-calibration-for-generative-models" title="Entropy calibration for generative models">Entropy calibration for generative models</a><ul><li><a href="#intuition-why-two-numbers" title="Intuition (why two numbers?)">Intuition (why two numbers?)</a></li><li><a href="#metric" title="Metric">Metric</a></li><li><a href="#inputs" title="Inputs">Inputs</a></li><li><a href="#what-could-go-wrong" title="What could go wrong">What could go wrong</a></li></ul></li><li><a href="#examples" title="Examples">Examples</a></li></ul><h3><a href="#structs">Module Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#enums" title="Enums">Enums</a></li><li><a href="#functions" title="Functions">Functions</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="../index.html">In crate surp</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">surp</a></div><h1>Module <span>entropy_<wbr>calibration</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/surp/entropy_calibration.rs.html#1-383">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="entropy-calibration-for-generative-models"><a class="doc-anchor" href="#entropy-calibration-for-generative-models">§</a>Entropy calibration for generative models</h2>
+<p>This module implements the core metrics used in
+<em>Cao, Valiant, Liang (NeurIPS 2025)</em> “On the Entropy Calibration of Language Models”.</p>
+<h3 id="intuition-why-two-numbers"><a class="doc-anchor" href="#intuition-why-two-numbers">§</a>Intuition (why two numbers?)</h3>
+<p>There are two relevant expectations for an autoregressive model (\hat p):</p>
+<ul>
+<li>
+<p><strong>Entropy over generations</strong>: sample a continuation from the model, then score the sampled
+tokens under the same model.
+[
+H(\hat p) = \mathbb{E}_{\hat Y \sim \hat p}[ -\log \hat p(\hat Y) ].
+]</p>
+</li>
+<li>
+<p><strong>Log loss on human text</strong>: sample a continuation from the <em>data</em> distribution (p^*), then
+score it under the model.
+[
+L(p^* \Vert \hat p) = \mathbb{E}_{Y \sim p^*}[ -\log \hat p(Y) ].
+]</p>
+</li>
+</ul>
+<p>For a well-calibrated model, these should match (per token, and over time), but empirically
+models often have <strong>entropy that grows with generation length</strong> (“error accumulation”).</p>
+<h3 id="metric"><a class="doc-anchor" href="#metric">§</a>Metric</h3>
+<p>We report <strong>entropy calibration error</strong> (EntCE) in bits per token:</p>
+<p>[
+\mathrm{EntCE} = H(\hat p) - L(p^* \Vert \hat p).
+]</p>
+<ul>
+<li><strong>EntCE &gt; 0</strong>: sampled generations have higher per-token entropy than the model’s per-token
+log loss on reference text. This is commonly associated with error accumulation, but the sign
+alone is not a complete quality metric.</li>
+<li><strong>EntCE &lt; 0</strong>: sampled generations have lower per-token entropy than the model’s per-token
+log loss on reference text. This can happen under strong truncation or alignment, and can
+correlate with repetitiveness, but again the sign alone is not definitive.</li>
+</ul>
+<h3 id="inputs"><a class="doc-anchor" href="#inputs">§</a>Inputs</h3>
+<p>This module consumes <strong>per-token log-probabilities</strong> (natural log / ln), typically produced by
+model inference code:</p>
+<ul>
+<li>For (H(\hat p)): logprobs of <em>generated tokens</em> under the model given their model-generated
+prefixes.</li>
+<li>For (L(p^* \Vert \hat p)): logprobs of <em>reference tokens</em> (human/code) under the model given
+their reference prefixes.</li>
+</ul>
+<p>If you already have negative log-likelihoods (NLLs), just pass <code>-nll</code> as log-probabilities.</p>
+<h3 id="what-could-go-wrong"><a class="doc-anchor" href="#what-could-go-wrong">§</a>What could go wrong</h3>
+<ul>
+<li><strong>Mismatched conditioning</strong>: for log loss, the prefix should be the reference prefix
+(“teacher forcing”), not the model’s own prefix.</li>
+<li><strong>Different truncation/filters</strong>: entropy is about the distribution you sample from. If you
+apply truncation (top-p, min-p, temperature), EntCE changes even if the base model is fixed.</li>
+<li><strong>Non-finite logprobs</strong>: <code>-inf</code> logprob means the model assigns probability 0; EntCE becomes
+infinite / undefined for that sample.</li>
+<li><strong>Length effects</strong>: if you compare across different maximum lengths, EntCE is not apples to
+apples. Prefer per-step curves or fixed-length evaluation.</li>
+</ul>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>surp::entropy_calibration::{entropy_calibration_bits, mean_nll_bits_from_ln};
+
+<span class="comment">// Suppose a model assigns probability 0.5 to each sampled token
+// (logprob = ln(0.5) for each token).
+</span><span class="kw">let </span>gen = <span class="macro">vec!</span>[(<span class="number">0.5_f64</span>).ln(); <span class="number">10</span>];
+<span class="kw">let </span>ref_ = <span class="macro">vec!</span>[(<span class="number">0.5_f64</span>).ln(); <span class="number">10</span>];
+
+<span class="kw">let </span>h_bits = mean_nll_bits_from_ln(<span class="kw-2">&amp;</span>gen).unwrap();
+<span class="macro">assert!</span>((h_bits - <span class="number">1.0</span>).abs() &lt; <span class="number">1e-12</span>);
+
+<span class="kw">let </span>stats = entropy_calibration_bits(<span class="kw-2">&amp;</span>gen, <span class="kw-2">&amp;</span>ref_).unwrap();
+<span class="macro">assert!</span>(stats.entce_bits_per_token.abs() &lt; <span class="number">1e-12</span>);</code></pre></div>
+<p>(Note: in real evaluation, <code>gen</code> and <code>ref_</code> will typically differ.)</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.EntropyCalibrationStats.html" title="struct surp::entropy_calibration::EntropyCalibrationStats">Entropy<wbr>Calibration<wbr>Stats</a></dt><dd>Summary statistics for entropy calibration (bits per token).</dd></dl><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><dl class="item-table"><dt><a class="enum" href="enum.EntropyCalibrationError.html" title="enum surp::entropy_calibration::EntropyCalibrationError">Entropy<wbr>Calibration<wbr>Error</a></dt><dd>Errors for entropy calibration computations.</dd></dl><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><dl class="item-table"><dt><a class="fn" href="fn.entce_bits_by_step.html" title="fn surp::entropy_calibration::entce_bits_by_step">entce_<wbr>bits_<wbr>by_<wbr>step</a></dt><dd>Compute per-step EntCE (bits/token) from aligned per-step curves.</dd><dt><a class="fn" href="fn.entropy_calibration_bits.html" title="fn surp::entropy_calibration::entropy_calibration_bits">entropy_<wbr>calibration_<wbr>bits</a></dt><dd>Compute entropy calibration stats in bits/token from two sets of per-token log-probabilities.</dd><dt><a class="fn" href="fn.mean_nll_bits_by_step_from_ln.html" title="fn surp::entropy_calibration::mean_nll_bits_by_step_from_ln">mean_<wbr>nll_<wbr>bits_<wbr>by_<wbr>step_<wbr>from_<wbr>ln</a></dt><dd>Compute per-step mean NLL (bits/token) from a batch of sequences of log-probabilities (ln).</dd><dt><a class="fn" href="fn.mean_nll_bits_from_ln.html" title="fn surp::entropy_calibration::mean_nll_bits_from_ln">mean_<wbr>nll_<wbr>bits_<wbr>from_<wbr>ln</a></dt><dd>Compute mean negative log-probability in bits/token from per-token log-probabilities in ln.</dd></dl></section></div></main></body></html>

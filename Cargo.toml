@@ -1,0 +1,16 @@
+[package]
+name = "surp"
+version = "0.1.0"
+edition = "2021"
+description = "Information theory primitives: entropy, KL divergence, mutual information"
+license = "MIT OR Apache-2.0"
+keywords = ["entropy", "information-theory", "kl-divergence", "mutual-information"]
+categories = ["algorithms", "science", "mathematics"]
+
+[dependencies]
+minilp = "0.2.2"
+rand = "0.8"
+thiserror = "2.0"
+
+[dev-dependencies]
+proptest = "1.5"

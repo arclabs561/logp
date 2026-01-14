@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["alpha_divergence","bhattacharyya_coefficient","bhattacharyya_distance","chi_squared_divergence","chi_squared_symmetric","f_divergence","fisher_distance_approx","hellinger_distance","hellinger_squared","hellinger_squared_tensorized","renyi_divergence","total_variation"]};
