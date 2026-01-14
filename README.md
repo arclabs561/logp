@@ -1,8 +1,8 @@
 # surp
 
-Information theory primitives: entropy, KL divergence, mutual information.
+Information theory: entropy, KL divergence, f-divergences, mutual information.
 
-(surp: from "surprisal")
+(surp: from surprisal, the unit of information)
 
 Dual-licensed under MIT or Apache-2.0.
 
@@ -119,6 +119,7 @@ if let Some(fit) = zipf_fit_from_counts(&counts, 5, 5000).unwrap() {
 
 ## Connections
 
-- [`fynch`](../fynch): Temperature scaling/truncation affects calibration
+- [`fynch`](../fynch): Temperature scaling affects entropy calibration
+- [`rkhs`](../rkhs): KL/JS for discrete; MMD for continuous distributions
 - [`wass`](../wass): Wasserstein vs entropy-based divergences
 - [`stratify`](../stratify): NMI for clustering evaluation
