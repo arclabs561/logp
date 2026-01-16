@@ -344,8 +344,8 @@ pub fn entropy_unseen_with_ci<T: std::hash::Hash + Eq + Clone>(
     confidence: f64,
     num_bootstrap: usize,
 ) -> (f64, f64, f64) {
-    use rand::seq::SliceRandom;
-    let mut rng = rand::thread_rng();
+    use rand::prelude::IndexedRandom;
+    let mut rng = rand::rng();
 
     let point_estimate = entropy_unseen(samples);
 
@@ -357,7 +357,7 @@ pub fn entropy_unseen_with_ci<T: std::hash::Hash + Eq + Clone>(
 
     for _ in 0..num_bootstrap {
         let resampled: Vec<_> = (0..samples.len())
-            .map(|_| samples.choose(&mut rng).unwrap().clone())
+            .map(|_| samples.choose(&mut rng).expect("non-empty").clone())
             .collect();
         bootstrap_estimates.push(entropy_unseen(&resampled));
     }
