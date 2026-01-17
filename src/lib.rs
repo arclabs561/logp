@@ -1,41 +1,53 @@
-//! # surp
+//! # logp
 //!
-//! Information theory primitives: surprisal, entropy, KL divergence.
+//! Information theory primitives: entropies and divergences.
 //!
-//! (surp: from "surprisal", the fundamental unit of information) If an event
-//! is certain, learning it happened conveys no information. If it's rare,
-//! learning it happened is highly informative.
+//! ## Scope
 //!
-//! ## Key Functions
+//! This crate is **L1 (Logic)** in the Tekne stack: it should stay small and reusable.
+//! It provides *scalar* information measures that appear across clustering, ranking,
+//! evaluation, and geometry:
 //!
-//! | Function | Measures | Formula |
-//! |----------|----------|---------|
-//! | [`entropy`] | Uncertainty in distribution | H(p) = -Σ p(x) log p(x) |
-//! | [`cross_entropy`] | Expected bits using wrong code | H(p,q) = -Σ p(x) log q(x) |
-//! | [`kl_divergence`] | "Distance" from q to p | KL(p‖q) = Σ p(x) log(p(x)/q(x)) |
-//! | [`js_divergence`] | Symmetric "distance" | JS(p,q) = ½KL(p‖m) + ½KL(q‖m) |
-//! | [`mutual_information`] | Shared information | I(X;Y) = H(X) + H(Y) - H(X,Y) |
+//! - Shannon entropy and cross-entropy
+//! - KL / Jensen–Shannon divergences
+//! - Csiszár \(f\)-divergences (a.k.a. *information monotone* divergences)
+//! - Bhattacharyya coefficient, Rényi/Tsallis families
+//! - Bregman divergences (convex-analytic, not generally monotone)
 //!
-//! ## Quick Start
+//! ## Distances vs divergences (terminology that prevents bugs)
 //!
-//! ```rust
-//! use surp::{entropy, kl_divergence, js_divergence};
+//! A **divergence** \(D(p:q)\) is usually required to satisfy:
 //!
-//! let p = [0.25, 0.25, 0.25, 0.25];  // uniform
-//! let q = [0.5, 0.25, 0.125, 0.125]; // skewed
+//! - \(D(p:q) \ge 0\)
+//! - \(D(p:p) = 0\)
 //!
-//! let h = entropy(&p);           // 2.0 bits (maximum for 4 outcomes)
-//! let kl = kl_divergence(&p, &q); // asymmetric divergence
-//! let js = js_divergence(&p, &q); // symmetric, bounded [0, 1]
-//! ```
+//! but it is typically **not** symmetric and **not** a metric (no triangle inequality).
+//! Many failures in downstream code are caused by treating a divergence as a distance metric.
 //!
-//! ## Why These Matter for ML
+//! ## Key invariants (what tests should enforce)
 //!
-//! - **Cross-entropy loss**: Standard classification loss is cross-entropy
-//!   between true labels (one-hot) and predicted probabilities
-//! - **KL divergence**: VAE latent space regularization, knowledge distillation
-//! - **Mutual information**: Feature selection, representation learning bounds
-//! - **JS divergence**: GAN training (original formulation)
+//! - **Jensen–Shannon** is bounded on the simplex:
+//!   \(0 \le JS(p,q) \le \ln 2\) (nats).
+//! - **Csiszár \(f\)-divergences** are monotone under coarse-graining (Markov kernels):
+//!   merging bins cannot increase the divergence.
+//!
+//! ## Further reading
+//!
+//! - Frank Nielsen, “Divergences” portal (taxonomy diagrams + references):
+//!   <https://franknielsen.github.io/Divergence/index.html>
+//! - `nocotan/awesome-information-geometry` (curated reading list):
+//!   <https://github.com/nocotan/awesome-information-geometry>
+//! - Csiszár (1967): \(f\)-divergences and information monotonicity.
+//! - Amari & Nagaoka (2000): *Methods of Information Geometry*.
+//!
+//! ## Taxonomy of Divergences (Nielsen)
+//!
+//! | Family | Generator | Key Property |
+//! |---|---|---|
+//! | **f-divergences** | Convex \(f(t)\) with \(f(1)=0\) | Monotone under Markov morphisms (coarse-graining) |
+//! | **Bregman** | Convex \(F(x)\) | Dually flat geometry; generalized Pythagorean theorem |
+//! | **Jensen-Shannon** | \(f\)-div + metric | Symmetric, bounded \([0, \ln 2]\), \(\sqrt{JS}\) is a metric |
+//! | **Alpha** | \(\rho_\alpha = \int p^\alpha q^{1-\alpha}\) | Encodes Rényi, Tsallis, Bhattacharyya, Hellinger |
 //!
 //! ## Connections
 //!
@@ -48,531 +60,593 @@
 //!
 //! - Shannon (1948). "A Mathematical Theory of Communication"
 //! - Cover & Thomas (2006). "Elements of Information Theory"
-//!
-//! ## Sublinear Estimation
-//!
-//! The [`unseen`] module implements the Valiant-Valiant estimators
-//! for entropy and support size from sublinear samples.
-//!
-//! **Key insight**: Given O(k/log k) samples from a distribution over k elements,
-//! we can accurately estimate entropy, support size, and distances. This is
-//! optimal up to constant factors.
-//!
-//! **References**:
-//! - Valiant & Valiant (2011). "Estimating the Unseen: An n/log(n)-Sample Estimator"
-//! - Valiant & Valiant (2017). "Estimating the Unseen: Improved Estimators" (JACM)
-//!
-//! ## What Can Go Wrong
-//!
-//! 1. **Zero probabilities in KL**: KL(p||q) is infinite if q(x)=0 where p(x)>0.
-//!    Use JS divergence or add smoothing.
-//! 2. **Not normalized**: Many functions assume probabilities sum to 1. Check inputs.
-//! 3. **Entropy of continuous distributions**: Discrete entropy ≠ differential entropy.
-//!    Discretization bin width affects results.
-//! 4. **Sample size too small**: Entropy estimators are biased for small samples.
-//!    Miller-Madow correction or Valiant-Valiant for sublinear regime.
-//! 5. **Floating point issues**: Very small probabilities can cause log(0) = -inf.
+
+#![forbid(unsafe_code)]
 
 use thiserror::Error;
 
-pub mod entropy_calibration;
-pub mod fdiv;
-pub mod unseen;
-pub mod zipf;
+/// Natural log of 2. Useful when converting nats ↔ bits or bounding Jensen–Shannon.
+pub const LN_2: f64 = core::f64::consts::LN_2;
 
-// Re-export commonly used f-divergences at crate root
-pub use fdiv::{
-    alpha_divergence, bhattacharyya_coefficient, bhattacharyya_distance, chi_squared_divergence,
-    f_divergence, hellinger_distance, hellinger_squared, hellinger_squared_tensorized,
-    renyi_divergence, total_variation,
-};
+/// KL Divergence between two diagonal Multivariate Gaussians.
+///
+/// Used for Variational Information Bottleneck (VIB) to regularize latent spaces.
+///
+/// Returns 0.5 * Σ [ (std1/std2)^2 + (mu2-mu1)^2 / std2^2 - 1 + 2*ln(std2/std1) ]
+pub fn kl_divergence_gaussians(mu1: &[f64], std1: &[f64], mu2: &[f64], std2: &[f64]) -> Result<f64> {
+    ensure_same_len(mu1, std1)?;
+    ensure_same_len(mu1, mu2)?;
+    ensure_same_len(mu1, std2)?;
 
-/// Error types for information theory operations.
+    let mut kl = 0.0;
+    for (((&m1, &s1), &m2), &s2) in mu1.iter().zip(std1).zip(mu2).zip(std2) {
+        if s1 <= 0.0 || s2 <= 0.0 {
+            return Err(Error::Domain("standard deviation must be positive"));
+        }
+        let v1 = s1 * s1;
+        let v2 = s2 * s2;
+        kl += (v1 / v2) + (m2 - m1).powi(2) / v2 - 1.0 + 2.0 * (s2.ln() - s1.ln());
+    }
+    Ok(0.5 * kl)
+}
+
+/// Errors for information-measure computations.
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("distributions have different lengths: {0} vs {1}")]
+    #[error("length mismatch: {0} vs {1}")]
     LengthMismatch(usize, usize),
 
-    #[error("distribution does not sum to 1.0 (sum = {0})")]
-    NotNormalized(f64),
+    #[error("empty input")]
+    Empty,
 
-    #[error("negative probability: {0}")]
-    NegativeProbability(f64),
+    #[error("non-finite entry at index {idx}: {value}")]
+    NonFinite { idx: usize, value: f64 },
 
-    #[error("KL divergence undefined: q[{index}] = 0 but p[{index}] = {p_val} > 0")]
-    KLUndefined { index: usize, p_val: f64 },
+    #[error("negative entry at index {idx}: {value}")]
+    Negative { idx: usize, value: f64 },
+
+    #[error("not normalized (expected sum≈1): sum={sum}")]
+    NotNormalized { sum: f64 },
+
+    #[error("invalid alpha: {alpha} (must be finite and not equal to {forbidden})")]
+    InvalidAlpha { alpha: f64, forbidden: f64 },
+
+    #[error("domain error: {0}")]
+    Domain(&'static str),
 }
 
-pub type Result<T> = std::result::Result<T, Error>;
+pub type Result<T> = core::result::Result<T, Error>;
 
-const LN_2: f64 = std::f64::consts::LN_2;
-const EPSILON: f64 = 1e-12;
-
-// =============================================================================
-// Fingerprint: the "histogram of histograms" from sample data
-// =============================================================================
-
-/// Compute the fingerprint of a sample: F[i] = count of elements appearing exactly i times.
-///
-/// The fingerprint captures the "shape" of a distribution without the labels.
-/// It's the key data structure for sublinear entropy estimation.
-///
-/// # Arguments
-///
-/// * `samples` - Slice of sample values (any Eq + Hash + Clone type)
-///
-/// # Returns
-///
-/// Vector where index i contains count of elements appearing exactly i+1 times.
-/// (Index 0 = elements appearing once, index 1 = appearing twice, etc.)
-///
-/// # Example
-///
-/// ```rust
-/// use surp::fingerprint;
-///
-/// let samples = ["a", "a", "b", "c", "c", "c"];
-/// let fp = fingerprint(&samples);
-///
-/// // "b" appears 1 time, "a" appears 2 times, "c" appears 3 times
-/// assert_eq!(fp[0], 1);  // F_1: one element appears once
-/// assert_eq!(fp[1], 1);  // F_2: one element appears twice  
-/// assert_eq!(fp[2], 1);  // F_3: one element appears three times
-/// ```
-pub fn fingerprint<T: std::hash::Hash + Eq + Clone>(samples: &[T]) -> Vec<usize> {
-    use std::collections::HashMap;
-
-    // Count occurrences
-    let mut counts: HashMap<T, usize> = HashMap::new();
-    for s in samples {
-        *counts.entry(s.clone()).or_insert(0) += 1;
+fn ensure_nonempty(x: &[f64]) -> Result<()> {
+    if x.is_empty() {
+        return Err(Error::Empty);
     }
+    Ok(())
+}
 
-    // Build fingerprint
-    let max_count = counts.values().copied().max().unwrap_or(0);
-    let mut fp = vec![0usize; max_count];
+fn ensure_same_len(a: &[f64], b: &[f64]) -> Result<()> {
+    if a.len() != b.len() {
+        return Err(Error::LengthMismatch(a.len(), b.len()));
+    }
+    Ok(())
+}
 
-    for &count in counts.values() {
-        if count > 0 {
-            fp[count - 1] += 1;
+fn ensure_nonnegative(x: &[f64]) -> Result<()> {
+    for (i, &v) in x.iter().enumerate() {
+        if !v.is_finite() {
+            return Err(Error::NonFinite { idx: i, value: v });
+        }
+        if v < 0.0 {
+            return Err(Error::Negative { idx: i, value: v });
         }
     }
-
-    fp
+    Ok(())
 }
 
-/// Count distinct elements in a sample.
-///
-/// This is the naive estimator - actual support size may be larger.
-pub fn distinct_count<T: std::hash::Hash + Eq>(samples: &[T]) -> usize {
-    use std::collections::HashSet;
-    samples.iter().collect::<HashSet<_>>().len()
+fn sum(x: &[f64]) -> f64 {
+    x.iter().sum()
 }
 
-/// Good-Turing estimate of unseen probability mass.
-///
-/// Estimates the total probability mass of elements not seen in the sample.
-/// Uses the simple formula: P(unseen) ≈ F₁ / n where F₁ is the count of
-/// elements appearing exactly once (singletons) and n is sample size.
-///
-/// # Arguments
-///
-/// * `fingerprint` - The fingerprint of the sample
-/// * `sample_size` - Total number of samples
-///
-/// # Returns
-///
-/// Estimated probability mass of unseen elements
-///
-/// # Example
-///
-/// ```rust
-/// use surp::{fingerprint, good_turing_unseen_mass};
-///
-/// let samples: Vec<u32> = vec![1, 1, 2, 3, 4, 5, 5, 5];
-/// let fp = fingerprint(&samples);
-/// let unseen = good_turing_unseen_mass(&fp, samples.len());
-///
-/// // F_1 = 2 (elements 2,3,4 appear once - wait, that's 3)
-/// // Actually: 2 appears 1x, 3 appears 1x, 4 appears 1x = F_1 = 3
-/// // unseen ≈ 3/8 = 0.375
-/// assert!(unseen > 0.0);
-/// ```
-pub fn good_turing_unseen_mass(fingerprint: &[usize], sample_size: usize) -> f64 {
-    if sample_size == 0 || fingerprint.is_empty() {
-        return 0.0;
+/// Validate that `p` is a probability distribution on the simplex (within `tol`).
+pub fn validate_simplex(p: &[f64], tol: f64) -> Result<()> {
+    ensure_nonempty(p)?;
+    ensure_nonnegative(p)?;
+    let s = sum(p);
+    if (s - 1.0).abs() > tol {
+        return Err(Error::NotNormalized { sum: s });
     }
-    fingerprint[0] as f64 / sample_size as f64
+    Ok(())
 }
 
-/// Shannon entropy: H(p) = -Σ p(x) log₂ p(x)
+/// Normalize a nonnegative vector in-place to sum to 1.
 ///
-/// Measures the average "surprise" or uncertainty in a distribution.
-/// Maximum entropy = log₂(n) for uniform distribution over n outcomes.
-///
-/// # Arguments
-///
-/// * `p` - Probability distribution (must sum to ~1.0)
-///
-/// # Returns
-///
-/// Entropy in bits (base-2 logarithm)
-///
-/// # Example
-///
-/// ```rust
-/// use surp::entropy;
-///
-/// let uniform = [0.25, 0.25, 0.25, 0.25];
-/// let certain = [1.0, 0.0, 0.0, 0.0];
-///
-/// assert!((entropy(&uniform) - 2.0).abs() < 1e-10);  // max entropy
-/// assert!(entropy(&certain) < 1e-10);                 // zero entropy
-/// ```
-pub fn entropy(p: &[f64]) -> f64 {
-    p.iter()
-        .filter(|&&x| x > EPSILON)
-        .map(|&x| -x * x.ln() / LN_2)
-        .sum()
+/// Returns the original sum.
+pub fn normalize_in_place(p: &mut [f64]) -> Result<f64> {
+    ensure_nonempty(p)?;
+    ensure_nonnegative(p)?;
+    let s = sum(p);
+    if s <= 0.0 {
+        return Err(Error::Domain("cannot normalize: sum <= 0"));
+    }
+    for v in p.iter_mut() {
+        *v /= s;
+    }
+    Ok(s)
 }
 
-/// Cross-entropy: H(p, q) = -Σ p(x) log₂ q(x)
+/// Shannon entropy \(H(p) = -\sum_i p_i \ln p_i\) (nats).
 ///
-/// Expected number of bits needed to encode samples from p using
-/// a code optimized for q. Always ≥ H(p), with equality iff p = q.
-///
-/// # Arguments
-///
-/// * `p` - True distribution
-/// * `q` - Model distribution
-///
-/// # Returns
-///
-/// Cross-entropy in bits
-///
-/// # Example
-///
-/// ```rust
-/// use surp::{entropy, cross_entropy};
-///
-/// let p = [0.5, 0.5];
-/// let q = [0.9, 0.1];
-///
-/// let h_p = entropy(&p);
-/// let h_pq = cross_entropy(&p, &q);
-/// assert!(h_pq >= h_p);  // cross-entropy ≥ entropy
-/// ```
-pub fn cross_entropy(p: &[f64], q: &[f64]) -> f64 {
-    assert_eq!(p.len(), q.len(), "distributions must have same length");
-
-    p.iter()
-        .zip(q.iter())
-        .filter(|(&pi, _)| pi > EPSILON)
-        .map(|(&pi, &qi)| -pi * (qi.max(EPSILON)).ln() / LN_2)
-        .sum()
+/// Requires `p` to be a valid simplex distribution (within `tol`).
+pub fn entropy_nats(p: &[f64], tol: f64) -> Result<f64> {
+    validate_simplex(p, tol)?;
+    let mut h = 0.0;
+    for &pi in p {
+        if pi > 0.0 {
+            h -= pi * pi.ln();
+        }
+    }
+    Ok(h)
 }
 
-/// KL divergence: KL(p ‖ q) = Σ p(x) log₂(p(x) / q(x))
-///
-/// Measures how much information is lost when q is used to approximate p.
-/// **Not symmetric**: KL(p‖q) ≠ KL(q‖p).
-///
-/// # Properties
-///
-/// - KL(p‖q) ≥ 0 (Gibbs' inequality)
-/// - KL(p‖q) = 0 iff p = q
-/// - Undefined if q(x) = 0 where p(x) > 0
-///
-/// # Arguments
-///
-/// * `p` - True distribution
-/// * `q` - Approximate distribution
-///
-/// # Returns
-///
-/// KL divergence in bits
-///
-/// # Example
-///
-/// ```rust
-/// use surp::kl_divergence;
-///
-/// let p = [0.5, 0.5];
-/// let q = [0.9, 0.1];
-///
-/// let kl_pq = kl_divergence(&p, &q);
-/// let kl_qp = kl_divergence(&q, &p);
-///
-/// assert!(kl_pq >= 0.0);
-/// assert!((kl_pq - kl_qp).abs() > 0.1);  // asymmetric!
-/// ```
-pub fn kl_divergence(p: &[f64], q: &[f64]) -> f64 {
-    assert_eq!(p.len(), q.len(), "distributions must have same length");
-
-    p.iter()
-        .zip(q.iter())
-        .filter(|(&pi, _)| pi > EPSILON)
-        .map(|(&pi, &qi)| pi * (pi / qi.max(EPSILON)).ln() / LN_2)
-        .sum()
+/// Shannon entropy in bits.
+pub fn entropy_bits(p: &[f64], tol: f64) -> Result<f64> {
+    Ok(entropy_nats(p, tol)? / LN_2)
 }
 
-/// Jensen-Shannon divergence: JS(p, q) = ½KL(p‖m) + ½KL(q‖m)
+/// Fast Shannon entropy calculation without simplex validation.
 ///
-/// Symmetric, bounded version of KL divergence where m = (p + q) / 2.
+/// Used in performance-critical loops like Sinkhorn iteration for Optimal Transport.
 ///
-/// # Properties
-///
-/// - 0 ≤ JS(p,q) ≤ 1 (in bits)
-/// - JS(p,q) = JS(q,p) (symmetric)
-/// - √JS is a proper metric
-///
-/// # Arguments
-///
-/// * `p` - First distribution
-/// * `q` - Second distribution
-///
-/// # Returns
-///
-/// JS divergence in bits, bounded [0, 1]
-///
-/// # Example
-///
-/// ```rust
-/// use surp::js_divergence;
-///
-/// let p = [0.5, 0.5];
-/// let q = [0.9, 0.1];
-///
-/// let js = js_divergence(&p, &q);
-/// assert!(js >= 0.0 && js <= 1.0);
-/// assert!((js_divergence(&p, &q) - js_divergence(&q, &p)).abs() < 1e-10);
-/// ```
-pub fn js_divergence(p: &[f64], q: &[f64]) -> f64 {
-    assert_eq!(p.len(), q.len(), "distributions must have same length");
+/// # Invariant
+/// Assumes `p` is non-negative and normalized.
+#[inline]
+pub fn entropy_unchecked(p: &[f64]) -> f64 {
+    let mut h = 0.0;
+    for &pi in p {
+        if pi > 0.0 {
+            h -= pi * pi.ln();
+        }
+    }
+    h
+}
 
-    let m: Vec<f64> = p
+/// Cross-entropy \(H(p,q) = -\sum_i p_i \ln q_i\) (nats).
+///
+/// Domain: `p` must be on the simplex; `q` must be nonnegative and normalized; and
+/// whenever `p_i > 0`, we require `q_i > 0` (otherwise cross-entropy is infinite).
+pub fn cross_entropy_nats(p: &[f64], q: &[f64], tol: f64) -> Result<f64> {
+    validate_simplex(p, tol)?;
+    validate_simplex(q, tol)?;
+    let mut h = 0.0;
+    for (i, (&pi, &qi)) in p.iter().zip(q.iter()).enumerate() {
+        if pi == 0.0 {
+            continue;
+        }
+        if qi <= 0.0 {
+            return Err(Error::Domain(match i {
+                _ => "cross-entropy undefined: q_i=0 while p_i>0",
+            }));
+        }
+        h -= pi * qi.ln();
+    }
+    Ok(h)
+}
+
+/// Kullback–Leibler divergence \(D_{KL}(p\|q) = \sum_i p_i \ln(p_i/q_i)\) (nats).
+///
+/// Domain: `p` and `q` must be valid simplex distributions; and whenever `p_i > 0`,
+/// we require `q_i > 0`.
+pub fn kl_divergence(p: &[f64], q: &[f64], tol: f64) -> Result<f64> {
+    ensure_same_len(p, q)?;
+    validate_simplex(p, tol)?;
+    validate_simplex(q, tol)?;
+    let mut d = 0.0;
+    for (&pi, &qi) in p.iter().zip(q.iter()) {
+        if pi == 0.0 {
+            continue;
+        }
+        if qi <= 0.0 {
+            return Err(Error::Domain("KL undefined: q_i=0 while p_i>0"));
+        }
+        d += pi * (pi / qi).ln();
+    }
+    Ok(d)
+}
+
+/// Jensen–Shannon divergence (nats), defined as:
+///
+/// \(JS(p,q) = \tfrac12 KL(p\|m) + \tfrac12 KL(q\|m)\), where \(m = \tfrac12(p+q)\).
+///
+/// Domain: `p`, `q` must be simplex distributions.
+///
+/// Bound: \(0 \le JS(p,q) \le \ln 2\).
+pub fn jensen_shannon_divergence(p: &[f64], q: &[f64], tol: f64) -> Result<f64> {
+    ensure_same_len(p, q)?;
+    validate_simplex(p, tol)?;
+    validate_simplex(q, tol)?;
+
+    let mut m = vec![0.0; p.len()];
+    for i in 0..p.len() {
+        m[i] = 0.5 * (p[i] + q[i]);
+    }
+
+    Ok(0.5 * kl_divergence(p, &m, tol)? + 0.5 * kl_divergence(q, &m, tol)?)
+}
+
+/// Bhattacharyya coefficient \(BC(p,q) = \sum_i \sqrt{p_i q_i}\).
+///
+/// For simplex distributions, \(BC \in [0,1]\).
+pub fn bhattacharyya_coeff(p: &[f64], q: &[f64], tol: f64) -> Result<f64> {
+    ensure_same_len(p, q)?;
+    validate_simplex(p, tol)?;
+    validate_simplex(q, tol)?;
+    let bc: f64 = p
         .iter()
         .zip(q.iter())
-        .map(|(&pi, &qi)| (pi + qi) / 2.0)
-        .collect();
-
-    0.5 * kl_divergence(p, &m) + 0.5 * kl_divergence(q, &m)
+        .map(|(&pi, &qi)| (pi * qi).sqrt())
+        .sum();
+    Ok(bc)
 }
 
-/// Mutual information from joint distribution: I(X;Y) = H(X) + H(Y) - H(X,Y)
-///
-/// Measures how much knowing X reduces uncertainty about Y (and vice versa).
-///
-/// # Arguments
-///
-/// * `joint` - Joint probability matrix P(X,Y), flattened row-major
-/// * `rows` - Number of X outcomes
-/// * `cols` - Number of Y outcomes
-///
-/// # Returns
-///
-/// Mutual information in bits
-///
-/// # Example
-///
-/// ```rust
-/// use surp::mutual_information;
-///
-/// // Independent: P(X,Y) = P(X)P(Y)
-/// let independent = [0.25, 0.25, 0.25, 0.25];  // uniform 2x2
-///
-/// // Perfectly dependent: X = Y
-/// let dependent = [0.5, 0.0, 0.0, 0.5];
-///
-/// let mi_indep = mutual_information(&independent, 2, 2);
-/// let mi_dep = mutual_information(&dependent, 2, 2);
-///
-/// assert!(mi_indep < 0.01);  // ~0 for independent
-/// assert!(mi_dep > 0.9);     // ~1 bit for perfect dependence
-/// ```
-pub fn mutual_information(joint: &[f64], rows: usize, cols: usize) -> f64 {
-    assert_eq!(
-        joint.len(),
-        rows * cols,
-        "joint size must match rows * cols"
-    );
-
-    // Marginals
-    let mut p_x = vec![0.0; rows];
-    let mut p_y = vec![0.0; cols];
-
-    for i in 0..rows {
-        for j in 0..cols {
-            let p_xy = joint[i * cols + j];
-            p_x[i] += p_xy;
-            p_y[j] += p_xy;
-        }
+/// Bhattacharyya distance \(D_B(p,q) = -\ln BC(p,q)\).
+pub fn bhattacharyya_distance(p: &[f64], q: &[f64], tol: f64) -> Result<f64> {
+    let bc = bhattacharyya_coeff(p, q, tol)?;
+    // When supports are disjoint, bc can be 0 (=> +∞ distance). Keep it explicit.
+    if bc == 0.0 {
+        return Err(Error::Domain("Bhattacharyya distance is infinite (BC=0)"));
     }
+    Ok(-bc.ln())
+}
 
-    // I(X;Y) = Σ P(x,y) log(P(x,y) / (P(x)P(y)))
-    let mut mi = 0.0;
-    for i in 0..rows {
-        for j in 0..cols {
-            let p_xy = joint[i * cols + j];
-            if p_xy > EPSILON && p_x[i] > EPSILON && p_y[j] > EPSILON {
-                mi += p_xy * (p_xy / (p_x[i] * p_y[j])).ln() / LN_2;
+/// Squared Hellinger distance: \(H^2(p,q) = 1 - \sum_i \sqrt{p_i q_i}\).
+pub fn hellinger_squared(p: &[f64], q: &[f64], tol: f64) -> Result<f64> {
+    let bc = bhattacharyya_coeff(p, q, tol)?;
+    Ok((1.0 - bc).max(0.0))
+}
+
+/// Hellinger distance \(H(p,q) = \sqrt{H^2(p,q)}\).
+pub fn hellinger(p: &[f64], q: &[f64], tol: f64) -> Result<f64> {
+    Ok(hellinger_squared(p, q, tol)?.sqrt())
+}
+
+fn pow_nonneg(x: f64, a: f64) -> Result<f64> {
+    if x < 0.0 || !x.is_finite() || !a.is_finite() {
+        return Err(Error::Domain("pow_nonneg: invalid input"));
+    }
+    if x == 0.0 {
+        if a == 0.0 {
+            // By continuity in the divergence formulas, treat 0^0 as 1.
+            return Ok(1.0);
+        }
+        if a > 0.0 {
+            return Ok(0.0);
+        }
+        return Err(Error::Domain("0^a for a<0 is infinite"));
+    }
+    Ok(x.powf(a))
+}
+
+/// \(\rho_\alpha[p:q] = \sum_i p_i^\alpha q_i^{1-\alpha}\).
+///
+/// This coefficient underlies Rényi/Tsallis/Bhattacharyya/Chernoff families.
+pub fn rho_alpha(p: &[f64], q: &[f64], alpha: f64, tol: f64) -> Result<f64> {
+    ensure_same_len(p, q)?;
+    validate_simplex(p, tol)?;
+    validate_simplex(q, tol)?;
+    if !alpha.is_finite() {
+        return Err(Error::InvalidAlpha {
+            alpha,
+            forbidden: f64::NAN,
+        });
+    }
+    let mut s = 0.0;
+    for (&pi, &qi) in p.iter().zip(q.iter()) {
+        let a = pow_nonneg(pi, alpha)?;
+        let b = pow_nonneg(qi, 1.0 - alpha)?;
+        s += a * b;
+    }
+    Ok(s)
+}
+
+/// Rényi divergence (nats):
+///
+/// \(D_\alpha^R(p\|q) = \frac{1}{\alpha-1}\ln \rho_\alpha[p:q]\), \(\alpha>0, \alpha \ne 1\).
+pub fn renyi_divergence(p: &[f64], q: &[f64], alpha: f64, tol: f64) -> Result<f64> {
+    if alpha == 1.0 {
+        return Err(Error::InvalidAlpha { alpha, forbidden: 1.0 });
+    }
+    let rho = rho_alpha(p, q, alpha, tol)?;
+    if rho <= 0.0 {
+        return Err(Error::Domain("rho_alpha <= 0"));
+    }
+    Ok(rho.ln() / (alpha - 1.0))
+}
+
+/// Tsallis divergence:
+///
+/// \(D_\alpha^T(p\|q) = \frac{\rho_\alpha[p:q] - 1}{\alpha-1}\), \(\alpha \ne 1\).
+pub fn tsallis_divergence(p: &[f64], q: &[f64], alpha: f64, tol: f64) -> Result<f64> {
+    if alpha == 1.0 {
+        return Err(Error::InvalidAlpha { alpha, forbidden: 1.0 });
+    }
+    Ok((rho_alpha(p, q, alpha, tol)? - 1.0) / (alpha - 1.0))
+}
+
+/// Amari \(\alpha\)-divergence (Amari parameter \(\alpha\in\mathbb{R}\)).
+///
+/// For \(\alpha \notin \{-1,1\}\):
+/// \(D^\alpha[p:q] = \frac{4}{1-\alpha^2}\left(1 - \rho_{\frac{1-\alpha}{2}}[p:q]\right)\).
+///
+/// Limits:
+/// - \(D^{-1}[p:q] = KL(p\|q)\)
+/// - \(D^{1}[p:q] = KL(q\|p)\)
+pub fn amari_alpha_divergence(p: &[f64], q: &[f64], alpha: f64, tol: f64) -> Result<f64> {
+    if !alpha.is_finite() {
+        return Err(Error::InvalidAlpha {
+            alpha,
+            forbidden: f64::NAN,
+        });
+    }
+    // Numerically stable handling near ±1.
+    let eps = 1e-10;
+    if (alpha + 1.0).abs() <= eps {
+        return kl_divergence(p, q, tol);
+    }
+    if (alpha - 1.0).abs() <= eps {
+        return kl_divergence(q, p, tol);
+    }
+    let t = (1.0 - alpha) / 2.0;
+    let rho = rho_alpha(p, q, t, tol)?;
+    Ok((4.0 / (1.0 - alpha * alpha)) * (1.0 - rho))
+}
+
+/// A Csiszár \(f\)-divergence with the standard form:
+///
+/// \(D_f(p\|q) = \sum_i q_i f(p_i / q_i)\).
+///
+/// When `q_i = 0`:
+/// - if `p_i = 0`, the contribution is treated as 0 (by continuity).
+/// - if `p_i > 0`, the divergence is infinite; we return an error.
+pub fn csiszar_f_divergence(
+    p: &[f64],
+    q: &[f64],
+    f: impl Fn(f64) -> f64,
+    tol: f64,
+) -> Result<f64> {
+    ensure_same_len(p, q)?;
+    validate_simplex(p, tol)?;
+    validate_simplex(q, tol)?;
+
+    let mut d = 0.0;
+    for (&pi, &qi) in p.iter().zip(q.iter()) {
+        if qi == 0.0 {
+            if pi == 0.0 {
+                continue;
             }
+            return Err(Error::Domain("f-divergence undefined: q_i=0 while p_i>0"));
         }
+        d += qi * f(pi / qi);
     }
-
-    mi.max(0.0) // Numerical errors can make it slightly negative
+    Ok(d)
 }
 
-/// Conditional entropy: H(Y|X) = H(X,Y) - H(X)
-///
-/// Average uncertainty remaining in Y after observing X.
-///
-/// # Arguments
-///
-/// * `joint` - Joint probability matrix P(X,Y), flattened row-major
-/// * `rows` - Number of X outcomes
-/// * `cols` - Number of Y outcomes
-///
-/// # Returns
-///
-/// Conditional entropy in bits
-pub fn conditional_entropy(joint: &[f64], rows: usize, cols: usize) -> f64 {
-    let h_xy = entropy(joint);
+/// Bregman generator: a convex function \(F\) and its gradient.
+pub trait BregmanGenerator {
+    /// Evaluate the potential \(F(x)\).
+    fn f(&self, x: &[f64]) -> Result<f64>;
 
-    // Marginal H(X)
-    let mut p_x = vec![0.0; rows];
-    for i in 0..rows {
-        for j in 0..cols {
-            p_x[i] += joint[i * cols + j];
-        }
-    }
-    let h_x = entropy(&p_x);
-
-    h_xy - h_x
+    /// Write \(\nabla F(x)\) into `out`.
+    fn grad_into(&self, x: &[f64], out: &mut [f64]) -> Result<()>;
 }
 
-/// Normalized mutual information: NMI(X,Y) = 2*I(X;Y) / (H(X) + H(Y))
-///
-/// Scaled to [0, 1] for easier interpretation and comparison.
-///
-/// # Arguments
-///
-/// * `joint` - Joint probability matrix P(X,Y), flattened row-major
-/// * `rows` - Number of X outcomes
-/// * `cols` - Number of Y outcomes
-///
-/// # Returns
-///
-/// NMI in [0, 1]
-pub fn normalized_mutual_information(joint: &[f64], rows: usize, cols: usize) -> f64 {
-    // Marginals
-    let mut p_x = vec![0.0; rows];
-    let mut p_y = vec![0.0; cols];
+/// Bregman divergence \(B_F(p,q) = F(p) - F(q) - \langle p-q, \nabla F(q)\rangle\).
+pub fn bregman_divergence(
+    gen: &impl BregmanGenerator,
+    p: &[f64],
+    q: &[f64],
+    grad_q: &mut [f64],
+) -> Result<f64> {
+    ensure_nonempty(p)?;
+    ensure_same_len(p, q)?;
+    if grad_q.len() != q.len() {
+        return Err(Error::LengthMismatch(grad_q.len(), q.len()));
+    }
+    gen.grad_into(q, grad_q)?;
+    let fp = gen.f(p)?;
+    let fq = gen.f(q)?;
+    let mut inner = 0.0;
+    for i in 0..p.len() {
+        inner += (p[i] - q[i]) * grad_q[i];
+    }
+    Ok(fp - fq - inner)
+}
 
-    for i in 0..rows {
-        for j in 0..cols {
-            let p_xy = joint[i * cols + j];
-            p_x[i] += p_xy;
-            p_y[j] += p_xy;
+/// Total Bregman divergence as shown in Nielsen’s taxonomy diagram:
+///
+/// \(tB_F(p,q) = \frac{B_F(p,q)}{\sqrt{1 + \|\nabla F(q)\|^2}}\).
+pub fn total_bregman_divergence(
+    gen: &impl BregmanGenerator,
+    p: &[f64],
+    q: &[f64],
+    grad_q: &mut [f64],
+) -> Result<f64> {
+    let b = bregman_divergence(gen, p, q, grad_q)?;
+    let grad_norm_sq: f64 = grad_q.iter().map(|&x| x * x).sum();
+    Ok(b / (1.0 + grad_norm_sq).sqrt())
+}
+
+/// Squared Euclidean Bregman generator: \(F(x)=\tfrac12\|x\|_2^2\), \(\nabla F(x)=x\).
+#[derive(Debug, Clone, Copy, Default)]
+pub struct SquaredL2;
+
+impl BregmanGenerator for SquaredL2 {
+    fn f(&self, x: &[f64]) -> Result<f64> {
+        ensure_nonempty(x)?;
+        Ok(0.5 * x.iter().map(|&v| v * v).sum::<f64>())
+    }
+
+    fn grad_into(&self, x: &[f64], out: &mut [f64]) -> Result<()> {
+        ensure_nonempty(x)?;
+        if out.len() != x.len() {
+            return Err(Error::LengthMismatch(out.len(), x.len()));
         }
+        out.copy_from_slice(x);
+        Ok(())
     }
-
-    let h_x = entropy(&p_x);
-    let h_y = entropy(&p_y);
-
-    if h_x + h_y < EPSILON {
-        return 1.0; // Both constant → perfectly "correlated"
-    }
-
-    let mi = mutual_information(joint, rows, cols);
-    2.0 * mi / (h_x + h_y)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
 
-    #[test]
-    fn test_entropy_uniform() {
-        let uniform = [0.25, 0.25, 0.25, 0.25];
-        let h = entropy(&uniform);
-        assert!((h - 2.0).abs() < 1e-10, "uniform entropy should be 2 bits");
+    const TOL: f64 = 1e-9;
+
+    fn simplex_vec(len: usize) -> impl Strategy<Value = Vec<f64>> {
+        // Draw nonnegative weights then normalize.
+        prop::collection::vec(0.0f64..10.0, len).prop_map(|mut v| {
+            let s: f64 = v.iter().sum();
+            if s == 0.0 {
+                v[0] = 1.0;
+                return v;
+            }
+            for x in v.iter_mut() {
+                *x /= s;
+            }
+            v
+        })
+    }
+
+    fn simplex_vec_pos(len: usize, eps: f64) -> impl Strategy<Value = Vec<f64>> {
+        prop::collection::vec(0.0f64..10.0, len).prop_map(move |mut v| {
+            // Add a small floor to avoid exact zeros (needed for KL-style domains).
+            for x in v.iter_mut() {
+                *x += eps;
+            }
+            let s: f64 = v.iter().sum();
+            for x in v.iter_mut() {
+                *x /= s;
+            }
+            v
+        })
+    }
+
+    fn random_partition(n: usize) -> impl Strategy<Value = Vec<usize>> {
+        // Partition indices into k buckets (k chosen implicitly).
+        // We generate a label in [0, n) for each index and later reindex to compact labels.
+        prop::collection::vec(0usize..n, n).prop_map(|labels| {
+            // Compress labels to 0..k-1 while preserving equality pattern.
+            use std::collections::BTreeMap;
+            let mut map = BTreeMap::<usize, usize>::new();
+            let mut next = 0usize;
+            labels
+                .into_iter()
+                .map(|l| {
+                    *map.entry(l).or_insert_with(|| {
+                        let id = next;
+                        next += 1;
+                        id
+                    })
+                })
+                .collect::<Vec<_>>()
+        })
+    }
+
+    fn coarse_grain(p: &[f64], labels: &[usize]) -> Vec<f64> {
+        let k = labels.iter().copied().max().unwrap_or(0) + 1;
+        let mut out = vec![0.0; k];
+        for (i, &lab) in labels.iter().enumerate() {
+            out[lab] += p[i];
+        }
+        out
     }
 
     #[test]
-    fn test_entropy_certain() {
-        let certain = [1.0, 0.0, 0.0, 0.0];
-        let h = entropy(&certain);
-        assert!(h < 1e-10, "certain distribution should have 0 entropy");
+    fn test_entropy_unchecked() {
+        let p = [0.5, 0.5];
+        let h = entropy_unchecked(&p);
+        // -0.5*ln(0.5) - 0.5*ln(0.5) = -ln(0.5) = ln(2)
+        assert!((h - LN_2).abs() < 1e-12);
     }
 
     #[test]
-    fn test_kl_non_negative() {
-        let p = [0.3, 0.4, 0.3];
-        let q = [0.5, 0.25, 0.25];
-        let kl = kl_divergence(&p, &q);
-        assert!(kl >= 0.0, "KL divergence must be non-negative");
-    }
-
-    #[test]
-    fn test_kl_zero_for_identical() {
-        let p = [0.3, 0.4, 0.3];
-        let kl = kl_divergence(&p, &p);
-        assert!(kl < 1e-10, "KL(p||p) should be 0");
-    }
-
-    #[test]
-    fn test_js_symmetric() {
-        let p = [0.3, 0.4, 0.3];
-        let q = [0.5, 0.25, 0.25];
-        let js_pq = js_divergence(&p, &q);
-        let js_qp = js_divergence(&q, &p);
-        assert!(
-            (js_pq - js_qp).abs() < 1e-10,
-            "JS divergence should be symmetric"
-        );
-    }
-
-    #[test]
-    fn test_js_bounded() {
+    fn js_is_bounded_by_ln2() {
         let p = [1.0, 0.0];
         let q = [0.0, 1.0];
-        let js = js_divergence(&p, &q);
-        assert!(js >= 0.0 && js <= 1.0 + 1e-10, "JS should be in [0, 1]");
+        let js = jensen_shannon_divergence(&p, &q, TOL).unwrap();
+        assert!(js <= LN_2 + 1e-12);
+        assert!(js >= 0.0);
     }
 
     #[test]
-    fn test_mutual_information_independent() {
-        // P(X,Y) = P(X)P(Y) for uniform
-        let independent = [0.25, 0.25, 0.25, 0.25];
-        let mi = mutual_information(&independent, 2, 2);
-        assert!(mi < 0.01, "independent variables should have ~0 MI");
+    fn bregman_squared_l2_matches_half_l2() {
+        let gen = SquaredL2;
+        let p = [1.0, 2.0, 3.0];
+        let q = [1.5, 1.5, 2.5];
+        let mut grad = [0.0; 3];
+        let b = bregman_divergence(&gen, &p, &q, &mut grad).unwrap();
+        let expected = 0.5 * p
+            .iter()
+            .zip(q.iter())
+            .map(|(&a, &b)| (a - b) * (a - b))
+            .sum::<f64>();
+        assert!((b - expected).abs() < 1e-12);
     }
 
-    #[test]
-    fn test_mutual_information_dependent() {
-        // X = Y (diagonal)
-        let dependent = [0.5, 0.0, 0.0, 0.5];
-        let mi = mutual_information(&dependent, 2, 2);
-        assert!(
-            (mi - 1.0).abs() < 0.01,
-            "perfectly dependent should have 1 bit MI"
-        );
-    }
+    proptest! {
+        #[test]
+        fn kl_is_nonnegative(p in simplex_vec_pos(8, 1e-6), q in simplex_vec_pos(8, 1e-6)) {
+            let d = kl_divergence(&p, &q, 1e-6).unwrap();
+            prop_assert!(d >= -1e-12);
+        }
 
-    #[test]
-    fn test_cross_entropy_geq_entropy() {
-        let p = [0.3, 0.4, 0.3];
-        let q = [0.5, 0.25, 0.25];
-        let h_p = entropy(&p);
-        let h_pq = cross_entropy(&p, &q);
-        assert!(h_pq >= h_p - 1e-10, "cross-entropy should be >= entropy");
-    }
+        #[test]
+        fn js_is_bounded(p in simplex_vec(16), q in simplex_vec(16)) {
+            let js = jensen_shannon_divergence(&p, &q, 1e-6).unwrap();
+            prop_assert!(js >= -1e-12);
+            prop_assert!(js <= LN_2 + 1e-9);
+        }
 
-    #[test]
-    fn test_nmi_bounds() {
-        let joint = [0.25, 0.25, 0.25, 0.25];
-        let nmi = normalized_mutual_information(&joint, 2, 2);
-        assert!(nmi >= 0.0 && nmi <= 1.0 + 1e-10, "NMI should be in [0, 1]");
+        #[test]
+        fn prop_kl_gaussians_is_nonnegative(
+            mu1 in prop::collection::vec(-10.0f64..10.0, 1..16),
+            std1 in prop::collection::vec(0.1f64..5.0, 1..16),
+            mu2 in prop::collection::vec(-10.0f64..10.0, 1..16),
+            std2 in prop::collection::vec(0.1f64..5.0, 1..16),
+        ) {
+            let n = mu1.len().min(std1.len()).min(mu2.len()).min(std2.len());
+            let d = kl_divergence_gaussians(&mu1[..n], &std1[..n], &mu2[..n], &std2[..n]).unwrap();
+            // KL divergence is always non-negative.
+            prop_assert!(d >= -1e-12);
+        }
+
+        #[test]
+        fn prop_kl_gaussians_is_zero_for_identical(
+            mu in prop::collection::vec(-10.0f64..10.0, 1..16),
+            std in prop::collection::vec(0.1f64..5.0, 1..16),
+        ) {
+            let n = mu.len().min(std.len());
+            let d = kl_divergence_gaussians(&mu[..n], &std[..n], &mu[..n], &std[..n]).unwrap();
+            prop_assert!(d.abs() < 1e-12);
+        }
+
+        #[test]
+        fn f_divergence_monotone_under_coarse_graining(
+            p in simplex_vec_pos(12, 1e-6),
+            q in simplex_vec_pos(12, 1e-6),
+            labels in random_partition(12),
+        ) {
+            // Use KL as an f-divergence instance: f(t)=t ln t.
+            // D_KL(p||q) = Σ q_i f(p_i/q_i).
+            let f = |t: f64| if t == 0.0 { 0.0 } else { t * t.ln() };
+            let d_f = csiszar_f_divergence(&p, &q, f, 1e-6).unwrap();
+
+            let pc = coarse_grain(&p, &labels);
+            let qc = coarse_grain(&q, &labels);
+            let d_fc = csiszar_f_divergence(&pc, &qc, f, 1e-6).unwrap();
+
+            // Coarse graining should not increase.
+            prop_assert!(d_fc <= d_f + 1e-9);
+        }
     }
 }
