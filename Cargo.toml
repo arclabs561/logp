@@ -3,15 +3,17 @@ name = "logp"
 version = "0.1.0"
 edition = "2021"
 authors = ["Arc <attobop@gmail.com>"]
-description = "Information theory primitives: entropies and divergences (KL, JS, f-divergences, Bregman)"
+description = "Information theory primitives: entropy, KL divergence, mutual information (KSG estimator), and information-monotone divergences"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/arclabs561/tekne"
+repository = "https://github.com/arclabs561/logp"
+homepage = "https://github.com/arclabs561/logp"
 documentation = "https://docs.rs/logp"
-keywords = ["information-theory", "entropy", "divergence", "bregman", "f-divergence"]
+keywords = ["information-theory", "entropy", "divergence", "mutual-information", "ksg-estimator"]
 categories = ["algorithms", "science", "mathematics"]
 
 [dependencies]
 thiserror = "2.0"
+ndarray = { workspace = true }
 
 [dev-dependencies]
 proptest = "1.5"

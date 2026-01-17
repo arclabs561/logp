@@ -65,6 +65,9 @@
 
 use thiserror::Error;
 
+mod ksg;
+pub use ksg::mutual_information_ksg;
+
 /// Natural log of 2. Useful when converting nats ↔ bits or bounding Jensen–Shannon.
 pub const LN_2: f64 = core::f64::consts::LN_2;
 
@@ -271,6 +274,53 @@ pub fn jensen_shannon_divergence(p: &[f64], q: &[f64], tol: f64) -> Result<f64> 
     }
 
     Ok(0.5 * kl_divergence(p, &m, tol)? + 0.5 * kl_divergence(q, &m, tol)?)
+}
+
+/// Mutual Information \(I(X;Y) = \sum_{x,y} p(x,y) \ln \frac{p(x,y)}{p(x)p(y)}\).
+///
+/// For discrete distributions, given a joint distribution matrix `p_xy`.
+pub fn mutual_information(p_xy: &ndarray::Array2<f64>, _tol: f64) -> Result<f64> {
+    let p_x = p_xy.sum_axis(ndarray::Axis(1));
+    let p_y = p_xy.sum_axis(ndarray::Axis(0));
+
+    let mut mi = 0.0;
+    for ((i, j), &pxy) in p_xy.indexed_iter() {
+        if pxy > 0.0 {
+            let px = p_x[i];
+            let py = p_y[j];
+            mi += pxy * (pxy / (px * py)).ln();
+        }
+    }
+    Ok(mi)
+}
+
+/// Pointwise Mutual Information \(PMI(x;y) = \ln \frac{p(x,y)}{p(x)p(y)}\).
+pub fn pmi(pxy: f64, px: f64, py: f64) -> f64 {
+    if pxy <= 0.0 || px <= 0.0 || py <= 0.0 {
+        0.0
+    } else {
+        (pxy / (px * py)).ln()
+    }
+}
+
+/// Digamma function \(\psi(x)\), the logarithmic derivative of the Gamma function.
+///
+/// Required for KSG Mutual Information estimation.
+/// Uses the asymptotic expansion for large x and the recurrence \(\psi(x+1) = \psi(x) + 1/x\).
+pub fn digamma(mut x: f64) -> f64 {
+    if x <= 0.0 {
+        return f64::NAN;
+    }
+    let mut result = 0.0;
+    while x < 7.0 {
+        result -= 1.0 / x;
+        x += 1.0;
+    }
+    let r = 1.0 / x;
+    result += x.ln() - 0.5 * r;
+    let r2 = r * r;
+    result -= r2 * (1.0 / 12.0 - r2 * (1.0 / 120.0 - r2 / 252.0));
+    result
 }
 
 /// Bhattacharyya coefficient \(BC(p,q) = \sum_i \sqrt{p_i q_i}\).
