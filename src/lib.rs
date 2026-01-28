@@ -4,7 +4,7 @@
 //!
 //! ## Scope
 //!
-//! This crate is **L1 (Logic)** in the Tekne stack: it should stay small and reusable.
+//! This crate is **L1 (Logic)** in the mathematical foundation: it should stay small and reusable.
 //! It provides *scalar* information measures that appear across clustering, ranking,
 //! evaluation, and geometry:
 //!
@@ -76,7 +76,12 @@ pub const LN_2: f64 = core::f64::consts::LN_2;
 /// Used for Variational Information Bottleneck (VIB) to regularize latent spaces.
 ///
 /// Returns 0.5 * Σ [ (std1/std2)^2 + (mu2-mu1)^2 / std2^2 - 1 + 2*ln(std2/std1) ]
-pub fn kl_divergence_gaussians(mu1: &[f64], std1: &[f64], mu2: &[f64], std2: &[f64]) -> Result<f64> {
+pub fn kl_divergence_gaussians(
+    mu1: &[f64],
+    std1: &[f64],
+    mu2: &[f64],
+    std2: &[f64],
+) -> Result<f64> {
     ensure_same_len(mu1, std1)?;
     ensure_same_len(mu1, mu2)?;
     ensure_same_len(mu1, std2)?;
@@ -221,14 +226,12 @@ pub fn cross_entropy_nats(p: &[f64], q: &[f64], tol: f64) -> Result<f64> {
     validate_simplex(p, tol)?;
     validate_simplex(q, tol)?;
     let mut h = 0.0;
-    for (i, (&pi, &qi)) in p.iter().zip(q.iter()).enumerate() {
+    for (&pi, &qi) in p.iter().zip(q.iter()) {
         if pi == 0.0 {
             continue;
         }
         if qi <= 0.0 {
-            return Err(Error::Domain(match i {
-                _ => "cross-entropy undefined: q_i=0 while p_i>0",
-            }));
+            return Err(Error::Domain("cross-entropy undefined: q_i=0 while p_i>0"));
         }
         h -= pi * qi.ln();
     }
@@ -278,20 +281,59 @@ pub fn jensen_shannon_divergence(p: &[f64], q: &[f64], tol: f64) -> Result<f64> 
 
 /// Mutual Information \(I(X;Y) = \sum_{x,y} p(x,y) \ln \frac{p(x,y)}{p(x)p(y)}\).
 ///
-/// For discrete distributions, given a joint distribution matrix `p_xy`.
-pub fn mutual_information(p_xy: &ndarray::Array2<f64>, _tol: f64) -> Result<f64> {
-    let p_x = p_xy.sum_axis(ndarray::Axis(1));
-    let p_y = p_xy.sum_axis(ndarray::Axis(0));
+/// For discrete distributions, given a **row-major** joint distribution table `p_xy`
+/// with shape `(n_x, n_y)`.
+///
+/// Public invariant (this is the important one): this API is **backend-agnostic**.
+/// It does not force `ndarray` into the public surface of an L1 crate.
+pub fn mutual_information(p_xy: &[f64], n_x: usize, n_y: usize, tol: f64) -> Result<f64> {
+    if n_x == 0 || n_y == 0 {
+        return Err(Error::Domain(
+            "mutual_information: n_x and n_y must be >= 1",
+        ));
+    }
+    if p_xy.len() != n_x * n_y {
+        return Err(Error::LengthMismatch(p_xy.len(), n_x * n_y));
+    }
+    validate_simplex(p_xy, tol)?;
+
+    let mut p_x = vec![0.0; n_x];
+    let mut p_y = vec![0.0; n_y];
+    for i in 0..n_x {
+        for j in 0..n_y {
+            let p = p_xy[i * n_y + j];
+            p_x[i] += p;
+            p_y[j] += p;
+        }
+    }
 
     let mut mi = 0.0;
-    for ((i, j), &pxy) in p_xy.indexed_iter() {
-        if pxy > 0.0 {
-            let px = p_x[i];
-            let py = p_y[j];
-            mi += pxy * (pxy / (px * py)).ln();
+    for i in 0..n_x {
+        for j in 0..n_y {
+            let pxy = p_xy[i * n_y + j];
+            if pxy > 0.0 {
+                let px = p_x[i];
+                let py = p_y[j];
+                if px <= 0.0 || py <= 0.0 {
+                    return Err(Error::Domain(
+                        "mutual_information: p(x)=0 or p(y)=0 while p(x,y)>0",
+                    ));
+                }
+                mi += pxy * (pxy / (px * py)).ln();
+            }
         }
     }
     Ok(mi)
+}
+
+/// `ndarray` adapter for discrete mutual information.
+///
+/// Requires `logp` feature `ndarray`.
+#[cfg(feature = "ndarray")]
+pub fn mutual_information_ndarray(p_xy: &ndarray::Array2<f64>, tol: f64) -> Result<f64> {
+    let (n_x, n_y) = p_xy.dim();
+    let flat: Vec<f64> = p_xy.iter().copied().collect();
+    mutual_information(&flat, n_x, n_y, tol)
 }
 
 /// Pointwise Mutual Information \(PMI(x;y) = \ln \frac{p(x,y)}{p(x)p(y)}\).
@@ -325,7 +367,7 @@ pub fn digamma(mut x: f64) -> f64 {
 
 /// Bhattacharyya coefficient \(BC(p,q) = \sum_i \sqrt{p_i q_i}\).
 ///
-/// For simplex distributions, \(BC \in [0,1]\).
+/// For simplex distributions, $BC \in [0,1]$.
 pub fn bhattacharyya_coeff(p: &[f64], q: &[f64], tol: f64) -> Result<f64> {
     ensure_same_len(p, q)?;
     validate_simplex(p, tol)?;
@@ -376,7 +418,7 @@ fn pow_nonneg(x: f64, a: f64) -> Result<f64> {
     Ok(x.powf(a))
 }
 
-/// \(\rho_\alpha[p:q] = \sum_i p_i^\alpha q_i^{1-\alpha}\).
+/// $\rho_\alpha(p,q) = \sum_i p_i^\alpha q_i^{1-\alpha}$.
 ///
 /// This coefficient underlies Rényi/Tsallis/Bhattacharyya/Chernoff families.
 pub fn rho_alpha(p: &[f64], q: &[f64], alpha: f64, tol: f64) -> Result<f64> {
@@ -400,10 +442,13 @@ pub fn rho_alpha(p: &[f64], q: &[f64], alpha: f64, tol: f64) -> Result<f64> {
 
 /// Rényi divergence (nats):
 ///
-/// \(D_\alpha^R(p\|q) = \frac{1}{\alpha-1}\ln \rho_\alpha[p:q]\), \(\alpha>0, \alpha \ne 1\).
+/// $D_\alpha^R(p\|q) = \frac{1}{\alpha-1}\ln \rho_\alpha(p,q)$, $\alpha>0, \alpha \ne 1$.
 pub fn renyi_divergence(p: &[f64], q: &[f64], alpha: f64, tol: f64) -> Result<f64> {
     if alpha == 1.0 {
-        return Err(Error::InvalidAlpha { alpha, forbidden: 1.0 });
+        return Err(Error::InvalidAlpha {
+            alpha,
+            forbidden: 1.0,
+        });
     }
     let rho = rho_alpha(p, q, alpha, tol)?;
     if rho <= 0.0 {
@@ -414,22 +459,25 @@ pub fn renyi_divergence(p: &[f64], q: &[f64], alpha: f64, tol: f64) -> Result<f6
 
 /// Tsallis divergence:
 ///
-/// \(D_\alpha^T(p\|q) = \frac{\rho_\alpha[p:q] - 1}{\alpha-1}\), \(\alpha \ne 1\).
+/// $D_\alpha^T(p\|q) = \frac{\rho_\alpha(p,q) - 1}{\alpha-1}$, $\alpha \ne 1$.
 pub fn tsallis_divergence(p: &[f64], q: &[f64], alpha: f64, tol: f64) -> Result<f64> {
     if alpha == 1.0 {
-        return Err(Error::InvalidAlpha { alpha, forbidden: 1.0 });
+        return Err(Error::InvalidAlpha {
+            alpha,
+            forbidden: 1.0,
+        });
     }
     Ok((rho_alpha(p, q, alpha, tol)? - 1.0) / (alpha - 1.0))
 }
 
-/// Amari \(\alpha\)-divergence (Amari parameter \(\alpha\in\mathbb{R}\)).
+/// Amari $\alpha$-divergence (Amari parameter $\alpha\in\mathbb{R}$).
 ///
-/// For \(\alpha \notin \{-1,1\}\):
-/// \(D^\alpha[p:q] = \frac{4}{1-\alpha^2}\left(1 - \rho_{\frac{1-\alpha}{2}}[p:q]\right)\).
+/// For $\alpha \notin \{-1,1\}$:
+/// $D^\alpha(p:q) = \frac{4}{1-\alpha^2}\left(1 - \rho_{\frac{1-\alpha}{2}}(p,q)\right)$.
 ///
 /// Limits:
-/// - \(D^{-1}[p:q] = KL(p\|q)\)
-/// - \(D^{1}[p:q] = KL(q\|p)\)
+/// - $D^{-1}(p:q) = KL(p\|q)$
+/// - $D^{1}(p:q) = KL(q\|p)$
 pub fn amari_alpha_divergence(p: &[f64], q: &[f64], alpha: f64, tol: f64) -> Result<f64> {
     if !alpha.is_finite() {
         return Err(Error::InvalidAlpha {
@@ -457,12 +505,7 @@ pub fn amari_alpha_divergence(p: &[f64], q: &[f64], alpha: f64, tol: f64) -> Res
 /// When `q_i = 0`:
 /// - if `p_i = 0`, the contribution is treated as 0 (by continuity).
 /// - if `p_i > 0`, the divergence is infinite; we return an error.
-pub fn csiszar_f_divergence(
-    p: &[f64],
-    q: &[f64],
-    f: impl Fn(f64) -> f64,
-    tol: f64,
-) -> Result<f64> {
+pub fn csiszar_f_divergence(p: &[f64], q: &[f64], f: impl Fn(f64) -> f64, tol: f64) -> Result<f64> {
     ensure_same_len(p, q)?;
     validate_simplex(p, tol)?;
     validate_simplex(q, tol)?;
@@ -629,17 +672,43 @@ mod tests {
     }
 
     #[test]
+    fn mutual_information_independent_is_zero() {
+        // p(x,y) = p(x)p(y) ⇒ I(X;Y)=0
+        let p_x = [0.5, 0.5];
+        let p_y = [0.25, 0.75];
+        // Row-major 2x2:
+        // [0.125, 0.375,
+        //  0.125, 0.375]
+        let p_xy = [
+            p_x[0] * p_y[0],
+            p_x[0] * p_y[1],
+            p_x[1] * p_y[0],
+            p_x[1] * p_y[1],
+        ];
+        let mi = mutual_information(&p_xy, 2, 2, TOL).unwrap();
+        assert!(mi.abs() < 1e-12, "mi={}", mi);
+    }
+
+    #[test]
+    fn mutual_information_perfect_correlation_is_ln2() {
+        // X=Y uniform bit ⇒ I(X;Y)=ln 2 (nats)
+        let p_xy = [0.5, 0.0, 0.0, 0.5]; // 2x2 diagonal
+        let mi = mutual_information(&p_xy, 2, 2, TOL).unwrap();
+        assert!((mi - LN_2).abs() < 1e-12, "mi={}", mi);
+    }
+
+    #[test]
     fn bregman_squared_l2_matches_half_l2() {
         let gen = SquaredL2;
         let p = [1.0, 2.0, 3.0];
         let q = [1.5, 1.5, 2.5];
         let mut grad = [0.0; 3];
         let b = bregman_divergence(&gen, &p, &q, &mut grad).unwrap();
-        let expected = 0.5 * p
-            .iter()
-            .zip(q.iter())
-            .map(|(&a, &b)| (a - b) * (a - b))
-            .sum::<f64>();
+        let expected = 0.5
+            * p.iter()
+                .zip(q.iter())
+                .map(|(&a, &b)| (a - b) * (a - b))
+                .sum::<f64>();
         assert!((b - expected).abs() < 1e-12);
     }
 

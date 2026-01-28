@@ -11,9 +11,14 @@ documentation = "https://docs.rs/logp"
 keywords = ["information-theory", "entropy", "divergence", "mutual-information", "ksg-estimator"]
 categories = ["algorithms", "science", "mathematics"]
 
+[features]
+default = []
+# Optional ndarray adapter for users who keep joint distributions as matrices.
+ndarray = ["dep:ndarray"]
+
 [dependencies]
 thiserror = "2.0"
-ndarray = "0.16"
+ndarray = { version = "0.16", optional = true }
 
 [dev-dependencies]
 proptest = "1.5"
