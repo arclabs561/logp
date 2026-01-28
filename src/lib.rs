@@ -367,7 +367,7 @@ pub fn digamma(mut x: f64) -> f64 {
 
 /// Bhattacharyya coefficient \(BC(p,q) = \sum_i \sqrt{p_i q_i}\).
 ///
-/// For simplex distributions, $BC \in [0,1]$.
+/// For simplex distributions, \(BC \in [0,1]\).
 pub fn bhattacharyya_coeff(p: &[f64], q: &[f64], tol: f64) -> Result<f64> {
     ensure_same_len(p, q)?;
     validate_simplex(p, tol)?;
