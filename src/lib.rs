@@ -654,6 +654,10 @@ mod tests {
         out
     }
 
+    fn l1(p: &[f64], q: &[f64]) -> f64 {
+        p.iter().zip(q.iter()).map(|(&a, &b)| (a - b).abs()).sum()
+    }
+
     #[test]
     fn test_entropy_unchecked() {
         let p = [0.5, 0.5];
@@ -766,6 +770,74 @@ mod tests {
 
             // Coarse graining should not increase.
             prop_assert!(d_fc <= d_f + 1e-9);
+        }
+    }
+
+    // Heavier “theorem-ish” checks: keep case count modest so `cargo test` stays fast.
+    proptest! {
+        #![proptest_config(ProptestConfig { cases: 64, .. ProptestConfig::default() })]
+
+        #[test]
+        fn pinsker_kl_lower_bounds_l1_squared(
+            p in simplex_vec_pos(16, 1e-6),
+            q in simplex_vec_pos(16, 1e-6),
+        ) {
+            // Pinsker: TV(p,q)^2 <= (1/2) KL(p||q)
+            // where TV = (1/2)||p-q||_1. Rearranged: KL(p||q) >= 0.5 * ||p-q||_1^2.
+            let kl = kl_divergence(&p, &q, 1e-6).unwrap();
+            let d1 = l1(&p, &q);
+            prop_assert!(kl + 1e-9 >= 0.5 * d1 * d1, "kl={kl} l1={d1}");
+        }
+
+        #[test]
+        fn sqrt_js_satisfies_triangle_inequality(
+            p in simplex_vec(12),
+            q in simplex_vec(12),
+            r in simplex_vec(12),
+        ) {
+            // Known fact: sqrt(JS) is a metric on the simplex.
+            let js_pq = jensen_shannon_divergence(&p, &q, 1e-6).unwrap().max(0.0).sqrt();
+            let js_qr = jensen_shannon_divergence(&q, &r, 1e-6).unwrap().max(0.0).sqrt();
+            let js_pr = jensen_shannon_divergence(&p, &r, 1e-6).unwrap().max(0.0).sqrt();
+            prop_assert!(js_pr <= js_pq + js_qr + 1e-7, "js_pr={js_pr} js_pq+js_qr={}", js_pq+js_qr);
+        }
+
+        #[test]
+        fn mutual_information_equals_kl_to_product(
+            // Ensure strictly positive so KL domains are satisfied.
+            p_xy in simplex_vec_pos(16, 1e-6),
+            nx in 2usize..=4,
+            ny in 2usize..=4,
+        ) {
+            // We need p_xy to have length nx*ny; we will truncate/renormalize a fixed-length draw.
+            let n = nx * ny;
+            let mut joint = p_xy;
+            joint.truncate(n);
+            // Renormalize after truncation.
+            let _ = normalize_in_place(&mut joint).unwrap();
+
+            // Compute MI via the dedicated function.
+            let mi = mutual_information(&joint, nx, ny, 1e-6).unwrap();
+
+            // Compute product of marginals and KL(joint || product).
+            let mut p_x = vec![0.0; nx];
+            let mut p_y = vec![0.0; ny];
+            for i in 0..nx {
+                for j in 0..ny {
+                    let p = joint[i * ny + j];
+                    p_x[i] += p;
+                    p_y[j] += p;
+                }
+            }
+            let mut prod = vec![0.0; n];
+            for i in 0..nx {
+                for j in 0..ny {
+                    prod[i * ny + j] = p_x[i] * p_y[j];
+                }
+            }
+            let kl = kl_divergence(&joint, &prod, 1e-6).unwrap();
+
+            prop_assert!((mi - kl).abs() < 1e-9, "mi={mi} kl={kl}");
         }
     }
 }

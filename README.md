@@ -6,6 +6,13 @@ Dual-licensed under MIT or Apache-2.0.
 
 [crates.io](https://crates.io/crates/logp) | [docs.rs](https://docs.rs/logp)
 
+## Quickstart
+
+```toml
+[dependencies]
+logp = "0.1.0"
+```
+
 ```rust
 use logp::{entropy_nats, kl_divergence, jensen_shannon_divergence};
 
