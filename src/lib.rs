@@ -46,7 +46,7 @@
 //! |---|---|---|
 //! | **f-divergences** | Convex \(f(t)\) with \(f(1)=0\) | Monotone under Markov morphisms (coarse-graining) |
 //! | **Bregman** | Convex \(F(x)\) | Dually flat geometry; generalized Pythagorean theorem |
-//! | **Jensen-Shannon** | \(f\)-div + metric | Symmetric, bounded \([0, \ln 2]\), \(\sqrt{JS}\) is a metric |
+//! | **Jensen-Shannon** | \(f\)-div + metric | Symmetric, bounded \(\[0, \ln 2\]\), \(\sqrt{JS}\) is a metric |
 //! | **Alpha** | \(\rho_\alpha = \int p^\alpha q^{1-\alpha}\) | Encodes Rényi, Tsallis, Bhattacharyya, Hellinger |
 //!
 //! ## Connections

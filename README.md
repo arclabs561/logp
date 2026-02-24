@@ -40,6 +40,6 @@ let js = jensen_shannon_divergence(&p, &q, 1e-9).unwrap();
 
 ## Connections
 
-- [`rkhs`](../rkhs): MMD and KL both measure distribution "distance"
-- [`wass`](../wass): Wasserstein vs entropy-based divergences
-- [`fynch`](../fynch): Temperature scaling affects entropy calibration
+- [`rkhs`](https://github.com/arclabs561/rkhs): MMD and KL both measure distribution "distance"
+- [`wass`](https://github.com/arclabs561/wass): Wasserstein vs entropy-based divergences
+- [`fynch`](https://github.com/arclabs561/fynch): Temperature scaling affects entropy calibration
