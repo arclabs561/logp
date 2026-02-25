@@ -716,6 +716,155 @@ mod tests {
         assert!((b - expected).abs() < 1e-12);
     }
 
+    // --- Entropy tests ---
+
+    #[test]
+    fn entropy_nats_uniform_is_ln_n() {
+        // Uniform distribution over n items: H = ln(n)
+        for n in [2, 4, 8, 16] {
+            let p: Vec<f64> = vec![1.0 / n as f64; n];
+            let h = entropy_nats(&p, TOL).unwrap();
+            let expected = (n as f64).ln();
+            assert!((h - expected).abs() < 1e-12, "n={n}: h={h} expected={expected}");
+        }
+    }
+
+    #[test]
+    fn entropy_nats_singleton_is_zero() {
+        let h = entropy_nats(&[1.0], TOL).unwrap();
+        assert!(h.abs() < 1e-15);
+    }
+
+    #[test]
+    fn entropy_bits_converts_correctly() {
+        let p = [0.25, 0.75];
+        let nats = entropy_nats(&p, TOL).unwrap();
+        let bits = entropy_bits(&p, TOL).unwrap();
+        assert!((bits - nats / LN_2).abs() < 1e-12);
+    }
+
+    // --- Cross-entropy tests ---
+
+    #[test]
+    fn cross_entropy_identity_h_pq_eq_h_p_plus_kl() {
+        let p = [0.3, 0.7];
+        let q = [0.5, 0.5];
+        let h_pq = cross_entropy_nats(&p, &q, TOL).unwrap();
+        let h_p = entropy_nats(&p, TOL).unwrap();
+        let kl = kl_divergence(&p, &q, TOL).unwrap();
+        assert!((h_pq - (h_p + kl)).abs() < 1e-12);
+    }
+
+    #[test]
+    fn cross_entropy_rejects_zero_q_with_positive_p() {
+        let p = [0.5, 0.5];
+        let q = [1.0, 0.0]; // q[1]=0 but p[1]=0.5
+        assert!(cross_entropy_nats(&p, &q, TOL).is_err());
+    }
+
+    // --- Validate / normalize tests ---
+
+    #[test]
+    fn validate_simplex_accepts_valid() {
+        assert!(validate_simplex(&[0.3, 0.7], TOL).is_ok());
+        assert!(validate_simplex(&[1.0], TOL).is_ok());
+    }
+
+    #[test]
+    fn validate_simplex_rejects_bad_sum() {
+        assert!(validate_simplex(&[0.3, 0.6], TOL).is_err()); // sum=0.9
+    }
+
+    #[test]
+    fn validate_simplex_rejects_negative() {
+        assert!(validate_simplex(&[1.5, -0.5], TOL).is_err());
+    }
+
+    #[test]
+    fn validate_simplex_rejects_empty() {
+        assert!(validate_simplex(&[], TOL).is_err());
+    }
+
+    #[test]
+    fn normalize_in_place_works() {
+        let mut v = vec![2.0, 3.0];
+        let s = normalize_in_place(&mut v).unwrap();
+        assert!((s - 5.0).abs() < 1e-12);
+        assert!((v[0] - 0.4).abs() < 1e-12);
+        assert!((v[1] - 0.6).abs() < 1e-12);
+    }
+
+    #[test]
+    fn normalize_in_place_rejects_zero_sum() {
+        let mut v = vec![0.0, 0.0];
+        assert!(normalize_in_place(&mut v).is_err());
+    }
+
+    // --- Hellinger / Bhattacharyya tests ---
+
+    #[test]
+    fn hellinger_identical_is_zero() {
+        let p = [0.25, 0.75];
+        let h = hellinger(&p, &p, TOL).unwrap();
+        assert!(h.abs() < 1e-12);
+    }
+
+    #[test]
+    fn hellinger_squared_in_unit_interval() {
+        let p = [0.1, 0.9];
+        let q = [0.9, 0.1];
+        let h2 = hellinger_squared(&p, &q, TOL).unwrap();
+        assert!(h2 >= -1e-12 && h2 <= 1.0 + 1e-12, "h2={h2}");
+    }
+
+    #[test]
+    fn bhattacharyya_coeff_identical_is_one() {
+        let p = [0.3, 0.7];
+        let bc = bhattacharyya_coeff(&p, &p, TOL).unwrap();
+        assert!((bc - 1.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn bhattacharyya_distance_identical_is_zero() {
+        let p = [0.5, 0.5];
+        let d = bhattacharyya_distance(&p, &p, TOL).unwrap();
+        assert!(d.abs() < 1e-12);
+    }
+
+    // --- Renyi / Tsallis tests ---
+
+    #[test]
+    fn renyi_alpha_half_on_simple_case() {
+        let p = [0.5, 0.5];
+        let q = [0.25, 0.75];
+        // alpha=0.5 should be well-defined and non-negative
+        let r = renyi_divergence(&p, &q, 0.5, TOL).unwrap();
+        assert!(r >= -1e-12, "renyi={r}");
+    }
+
+    #[test]
+    fn renyi_identical_is_zero() {
+        let p = [0.3, 0.7];
+        let r = renyi_divergence(&p, &p, 2.0, TOL).unwrap();
+        assert!(r.abs() < 1e-12, "renyi(p,p)={r}");
+    }
+
+    #[test]
+    fn tsallis_identical_is_zero() {
+        let p = [0.4, 0.6];
+        let t = tsallis_divergence(&p, &p, 2.0, TOL).unwrap();
+        assert!(t.abs() < 1e-12, "tsallis(p,p)={t}");
+    }
+
+    // --- Digamma test ---
+
+    #[test]
+    fn digamma_at_one_is_neg_euler_mascheroni() {
+        let psi1 = digamma(1.0);
+        // digamma(1) = -gamma where gamma ~= 0.5772156649
+        assert!((psi1 - (-0.5772156649)).abs() < 1e-8, "psi(1)={psi1}");
+    }
+
     proptest! {
         #[test]
         fn kl_is_nonnegative(p in simplex_vec_pos(8, 1e-6), q in simplex_vec_pos(8, 1e-6)) {
