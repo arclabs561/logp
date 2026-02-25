@@ -66,7 +66,7 @@
 use thiserror::Error;
 
 mod ksg;
-pub use ksg::mutual_information_ksg;
+pub use ksg::{mutual_information_ksg, KsgVariant};
 
 /// Natural log of 2. Useful when converting nats ↔ bits or bounding Jensen–Shannon.
 pub const LN_2: f64 = core::f64::consts::LN_2;
@@ -863,6 +863,86 @@ mod tests {
         let psi1 = digamma(1.0);
         // digamma(1) = -gamma where gamma ~= 0.5772156649
         assert!((psi1 - (-0.5772156649)).abs() < 1e-8, "psi(1)={psi1}");
+    }
+
+    #[test]
+    fn digamma_recurrence_relation() {
+        // digamma(x+1) = digamma(x) + 1/x
+        for &x in &[1.0, 2.0, 3.5, 10.0] {
+            let lhs = digamma(x + 1.0);
+            let rhs = digamma(x) + 1.0 / x;
+            assert!((lhs - rhs).abs() < 1e-8, "recurrence at x={x}: {lhs} vs {rhs}");
+        }
+    }
+
+    #[test]
+    fn pmi_independent_is_zero() {
+        // PMI(x,y) = log(p(x,y) / (p(x)*p(y))). If independent: p(x,y) = p(x)*p(y)
+        let pmi_val = pmi(0.06, 0.3, 0.2); // 0.3 * 0.2 = 0.06
+        assert!(pmi_val.abs() < 1e-10, "PMI of independent events should be 0: {pmi_val}");
+    }
+
+    #[test]
+    fn pmi_positive_for_correlated() {
+        // If p(x,y) > p(x)*p(y), events are positively correlated
+        let pmi_val = pmi(0.4, 0.5, 0.5); // 0.4 > 0.5*0.5 = 0.25
+        assert!(pmi_val > 0.0, "correlated events should have positive PMI: {pmi_val}");
+    }
+
+    #[test]
+    fn renyi_approaches_kl_as_alpha_to_one() {
+        let p = [0.3, 0.7];
+        let q = [0.5, 0.5];
+        let tol = 1e-9;
+        let kl = kl_divergence(&p, &q, tol).unwrap();
+        // Renyi(alpha) -> KL as alpha -> 1
+        let r099 = renyi_divergence(&p, &q, 0.99, tol).unwrap();
+        let r0999 = renyi_divergence(&p, &q, 0.999, tol).unwrap();
+        assert!((r099 - kl).abs() < 0.01, "Renyi(0.99)={r099}, KL={kl}");
+        assert!((r0999 - kl).abs() < 0.001, "Renyi(0.999)={r0999}, KL={kl}");
+    }
+
+    #[test]
+    fn amari_alpha_neg1_is_kl_forward() {
+        // Amari alpha=-1 returns KL(p||q) per the implementation
+        let p = [0.3, 0.7];
+        let q = [0.5, 0.5];
+        let tol = 1e-9;
+        let kl_pq = kl_divergence(&p, &q, tol).unwrap();
+        let amari = amari_alpha_divergence(&p, &q, -1.0, tol).unwrap();
+        assert!((amari - kl_pq).abs() < 1e-6, "Amari(-1)={amari}, KL(p||q)={kl_pq}");
+    }
+
+    #[test]
+    fn amari_alpha_pos1_is_kl_reverse() {
+        // Amari alpha=+1 returns KL(q||p) per the implementation
+        let p = [0.3, 0.7];
+        let q = [0.5, 0.5];
+        let tol = 1e-9;
+        let kl_qp = kl_divergence(&q, &p, tol).unwrap();
+        let amari = amari_alpha_divergence(&p, &q, 1.0, tol).unwrap();
+        assert!((amari - kl_qp).abs() < 1e-6, "Amari(1)={amari}, KL(q||p)={kl_qp}");
+    }
+
+    #[test]
+    fn csiszar_with_kl_generator_matches_kl() {
+        // f(t) = t*ln(t) gives KL divergence
+        let p = [0.3, 0.7];
+        let q = [0.5, 0.5];
+        let tol = 1e-9;
+        let kl = kl_divergence(&p, &q, tol).unwrap();
+        let cs = csiszar_f_divergence(&p, &q, |t| t * t.ln(), tol).unwrap();
+        assert!((cs - kl).abs() < 1e-6, "Csiszar(t*ln(t))={cs}, KL={kl}");
+    }
+
+    #[test]
+    fn mutual_information_deterministic_equals_entropy() {
+        // If Y = f(X), MI(X;Y) = H(X)
+        // Joint: p(x=0,y=0)=0.3, p(x=1,y=1)=0.7
+        let p_xy = [0.3, 0.0, 0.0, 0.7]; // 2x2 joint
+        let mi = mutual_information(&p_xy, 2, 2, 1e-9).unwrap();
+        let h_x = entropy_nats(&[0.3, 0.7], 1e-9).unwrap();
+        assert!((mi - h_x).abs() < 1e-6, "MI={mi}, H(X)={h_x}");
     }
 
     proptest! {
