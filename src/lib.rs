@@ -76,6 +76,21 @@ pub const LN_2: f64 = core::f64::consts::LN_2;
 /// Used for Variational Information Bottleneck (VIB) to regularize latent spaces.
 ///
 /// Returns 0.5 * Σ [ (std1/std2)^2 + (mu2-mu1)^2 / std2^2 - 1 + 2*ln(std2/std1) ]
+///
+/// # Examples
+///
+/// ```
+/// # use logp::kl_divergence_gaussians;
+/// // KL(N || N) = 0 (identical Gaussians).
+/// let mu = [0.0, 1.0];
+/// let std = [1.0, 2.0];
+/// let kl = kl_divergence_gaussians(&mu, &std, &mu, &std).unwrap();
+/// assert!(kl.abs() < 1e-12);
+///
+/// // KL is non-negative for distinct Gaussians.
+/// let kl = kl_divergence_gaussians(&[0.0], &[1.0], &[1.0], &[1.0]).unwrap();
+/// assert!(kl >= 0.0);
+/// ```
 pub fn kl_divergence_gaussians(
     mu1: &[f64],
     std1: &[f64],
@@ -156,6 +171,24 @@ fn sum(x: &[f64]) -> f64 {
 }
 
 /// Validate that `p` is a probability distribution on the simplex (within `tol`).
+///
+/// # Examples
+///
+/// ```
+/// # use logp::validate_simplex;
+/// // Valid simplex.
+/// assert!(validate_simplex(&[0.3, 0.7], 1e-9).is_ok());
+/// assert!(validate_simplex(&[1.0], 1e-9).is_ok());
+///
+/// // Rejects bad sum.
+/// assert!(validate_simplex(&[0.3, 0.6], 1e-9).is_err());
+///
+/// // Rejects negative entries.
+/// assert!(validate_simplex(&[1.5, -0.5], 1e-9).is_err());
+///
+/// // Rejects empty input.
+/// assert!(validate_simplex(&[], 1e-9).is_err());
+/// ```
 pub fn validate_simplex(p: &[f64], tol: f64) -> Result<()> {
     ensure_nonempty(p)?;
     ensure_nonnegative(p)?;
@@ -169,6 +202,21 @@ pub fn validate_simplex(p: &[f64], tol: f64) -> Result<()> {
 /// Normalize a nonnegative vector in-place to sum to 1.
 ///
 /// Returns the original sum.
+///
+/// # Examples
+///
+/// ```
+/// # use logp::normalize_in_place;
+/// let mut v = vec![2.0, 3.0, 5.0];
+/// let original_sum = normalize_in_place(&mut v).unwrap();
+/// assert!((original_sum - 10.0).abs() < 1e-12);
+/// assert!((v[0] - 0.2).abs() < 1e-12);
+/// assert!((v[1] - 0.3).abs() < 1e-12);
+/// assert!((v[2] - 0.5).abs() < 1e-12);
+///
+/// // Rejects all-zero input.
+/// assert!(normalize_in_place(&mut vec![0.0, 0.0]).is_err());
+/// ```
 pub fn normalize_in_place(p: &mut [f64]) -> Result<f64> {
     ensure_nonempty(p)?;
     ensure_nonnegative(p)?;
@@ -198,6 +246,20 @@ pub fn normalize_in_place(p: &mut [f64]) -> Result<f64> {
 /// # Domain
 ///
 /// Requires `p` to be a valid simplex distribution (within `tol`).
+///
+/// # Examples
+///
+/// ```
+/// # use logp::entropy_nats;
+/// // Uniform distribution over 4 outcomes: H = ln(4).
+/// let p = [0.25, 0.25, 0.25, 0.25];
+/// let h = entropy_nats(&p, 1e-9).unwrap();
+/// assert!((h - 4.0_f64.ln()).abs() < 1e-12);
+///
+/// // Delta (point mass): H = 0.
+/// let delta = [1.0, 0.0, 0.0];
+/// assert!(entropy_nats(&delta, 1e-9).unwrap().abs() < 1e-15);
+/// ```
 pub fn entropy_nats(p: &[f64], tol: f64) -> Result<f64> {
     validate_simplex(p, tol)?;
     let mut h = 0.0;
@@ -210,6 +272,20 @@ pub fn entropy_nats(p: &[f64], tol: f64) -> Result<f64> {
 }
 
 /// Shannon entropy in bits.
+///
+/// # Examples
+///
+/// ```
+/// # use logp::{entropy_bits, entropy_nats, LN_2};
+/// // Fair coin: H = 1 bit.
+/// let p = [0.5, 0.5];
+/// let bits = entropy_bits(&p, 1e-9).unwrap();
+/// assert!((bits - 1.0).abs() < 1e-12);
+///
+/// // Consistent with nats / ln(2).
+/// let nats = entropy_nats(&p, 1e-9).unwrap();
+/// assert!((bits - nats / LN_2).abs() < 1e-12);
+/// ```
 pub fn entropy_bits(p: &[f64], tol: f64) -> Result<f64> {
     Ok(entropy_nats(p, tol)? / LN_2)
 }
@@ -220,6 +296,20 @@ pub fn entropy_bits(p: &[f64], tol: f64) -> Result<f64> {
 ///
 /// # Invariant
 /// Assumes `p` is non-negative and normalized.
+///
+/// # Examples
+///
+/// ```
+/// # use logp::{entropy_unchecked, LN_2};
+/// // Fair coin: H = ln(2).
+/// let h = entropy_unchecked(&[0.5, 0.5]);
+/// assert!((h - LN_2).abs() < 1e-12);
+///
+/// // Agrees with the checked version on valid input.
+/// let p = [0.3, 0.7];
+/// let h_checked = logp::entropy_nats(&p, 1e-9).unwrap();
+/// assert!((entropy_unchecked(&p) - h_checked).abs() < 1e-15);
+/// ```
 #[inline]
 pub fn entropy_unchecked(p: &[f64]) -> f64 {
     let mut h = 0.0;
@@ -249,6 +339,24 @@ pub fn entropy_unchecked(p: &[f64]) -> f64 {
 ///
 /// `p` must be on the simplex; `q` must be nonnegative and normalized; and
 /// whenever `p_i > 0`, we require `q_i > 0` (otherwise cross-entropy is infinite).
+///
+/// # Examples
+///
+/// ```
+/// # use logp::{cross_entropy_nats, entropy_nats, kl_divergence};
+/// let p = [0.3, 0.7];
+/// let q = [0.5, 0.5];
+/// let h_pq = cross_entropy_nats(&p, &q, 1e-9).unwrap();
+///
+/// // Decomposition: H(p,q) = H(p) + KL(p||q).
+/// let h_p = entropy_nats(&p, 1e-9).unwrap();
+/// let kl = kl_divergence(&p, &q, 1e-9).unwrap();
+/// assert!((h_pq - (h_p + kl)).abs() < 1e-12);
+///
+/// // Self-cross-entropy equals entropy: H(p,p) = H(p).
+/// let h_pp = cross_entropy_nats(&p, &p, 1e-9).unwrap();
+/// assert!((h_pp - h_p).abs() < 1e-12);
+/// ```
 pub fn cross_entropy_nats(p: &[f64], q: &[f64], tol: f64) -> Result<f64> {
     validate_simplex(p, tol)?;
     validate_simplex(q, tol)?;
@@ -287,6 +395,24 @@ pub fn cross_entropy_nats(p: &[f64], q: &[f64], tol: f64) -> Result<f64> {
 ///
 /// `p` and `q` must be valid simplex distributions; and whenever `p_i > 0`,
 /// we require `q_i > 0`.
+///
+/// # Examples
+///
+/// ```
+/// # use logp::kl_divergence;
+/// // KL(p || p) = 0 (Gibbs' inequality, tight case).
+/// let p = [0.2, 0.3, 0.5];
+/// assert!(kl_divergence(&p, &p, 1e-9).unwrap().abs() < 1e-15);
+///
+/// // KL is non-negative.
+/// let q = [0.5, 0.25, 0.25];
+/// assert!(kl_divergence(&p, &q, 1e-9).unwrap() >= 0.0);
+///
+/// // Not symmetric in general.
+/// let kl_pq = kl_divergence(&p, &q, 1e-9).unwrap();
+/// let kl_qp = kl_divergence(&q, &p, 1e-9).unwrap();
+/// assert!((kl_pq - kl_qp).abs() > 1e-6);
+/// ```
 pub fn kl_divergence(p: &[f64], q: &[f64], tol: f64) -> Result<f64> {
     ensure_same_len(p, q)?;
     validate_simplex(p, tol)?;
@@ -324,6 +450,27 @@ pub fn kl_divergence(p: &[f64], q: &[f64], tol: f64) -> Result<f64> {
 /// # Domain
 ///
 /// `p`, `q` must be simplex distributions.
+///
+/// # Examples
+///
+/// ```
+/// # use logp::{jensen_shannon_divergence, LN_2};
+/// // JS(p, p) = 0.
+/// let p = [0.3, 0.7];
+/// assert!(jensen_shannon_divergence(&p, &p, 1e-9).unwrap().abs() < 1e-15);
+///
+/// // Disjoint supports: JS = ln(2).
+/// let a = [1.0, 0.0];
+/// let b = [0.0, 1.0];
+/// let js = jensen_shannon_divergence(&a, &b, 1e-9).unwrap();
+/// assert!((js - LN_2).abs() < 1e-12);
+///
+/// // Symmetric: JS(p, q) = JS(q, p).
+/// let q = [0.5, 0.5];
+/// let js_pq = jensen_shannon_divergence(&p, &q, 1e-9).unwrap();
+/// let js_qp = jensen_shannon_divergence(&q, &p, 1e-9).unwrap();
+/// assert!((js_pq - js_qp).abs() < 1e-15);
+/// ```
 pub fn jensen_shannon_divergence(p: &[f64], q: &[f64], tol: f64) -> Result<f64> {
     ensure_same_len(p, q)?;
     validate_simplex(p, tol)?;
@@ -360,6 +507,21 @@ pub fn jensen_shannon_divergence(p: &[f64], q: &[f64], tol: f64) -> Result<f64> 
 ///
 /// Public invariant (this is the important one): this API is **backend-agnostic**.
 /// It does not force `ndarray` into the public surface of an L1 crate.
+///
+/// # Examples
+///
+/// ```
+/// # use logp::{mutual_information, entropy_nats, LN_2};
+/// // Independent joint: p(x,y) = p(x)*p(y), so I(X;Y) = 0.
+/// let p_xy = [0.15, 0.35, 0.15, 0.35]; // 2x2, marginals [0.5,0.5] x [0.3,0.7]
+/// let mi = mutual_information(&p_xy, 2, 2, 1e-9).unwrap();
+/// assert!(mi.abs() < 1e-12);
+///
+/// // Perfect correlation (Y = X, uniform bit): I(X;Y) = H(X) = ln(2).
+/// let diag = [0.5, 0.0, 0.0, 0.5];
+/// let mi = mutual_information(&diag, 2, 2, 1e-9).unwrap();
+/// assert!((mi - LN_2).abs() < 1e-12);
+/// ```
 pub fn mutual_information(p_xy: &[f64], n_x: usize, n_y: usize, tol: f64) -> Result<f64> {
     if n_x == 0 || n_y == 0 {
         return Err(Error::Domain(
@@ -425,6 +587,24 @@ pub fn mutual_information_ndarray(p_xy: &ndarray::Array2<f64>, tol: f64) -> Resu
 ///   MI is the expected value of PMI over the joint distribution.
 /// - **Connection to word2vec**: Levy & Goldberg (2014) showed that Skip-gram with
 ///   negative sampling implicitly factorizes a PMI matrix (shifted by \(\ln k\)).
+///
+/// # Examples
+///
+/// ```
+/// # use logp::pmi;
+/// // Independent events: p(x,y) = p(x)*p(y), so PMI = 0.
+/// let val = pmi(0.06, 0.3, 0.2);
+/// assert!(val.abs() < 1e-10);
+///
+/// // Positive correlation: p(x,y) > p(x)*p(y).
+/// assert!(pmi(0.4, 0.5, 0.5) > 0.0);
+///
+/// // Negative correlation: p(x,y) < p(x)*p(y).
+/// assert!(pmi(0.1, 0.5, 0.5) < 0.0);
+///
+/// // Zero joint probability returns 0 by convention.
+/// assert_eq!(pmi(0.0, 0.5, 0.5), 0.0);
+/// ```
 pub fn pmi(pxy: f64, px: f64, py: f64) -> f64 {
     if pxy <= 0.0 || px <= 0.0 || py <= 0.0 {
         0.0
@@ -456,6 +636,23 @@ pub fn pmi(pxy: f64, px: f64, py: f64) -> f64 {
 ///
 /// Uses the recurrence to shift small \(x\) up to \(x \ge 7\), then applies the
 /// asymptotic expansion with Bernoulli-number correction terms.
+///
+/// # Examples
+///
+/// ```
+/// # use logp::digamma;
+/// // psi(1) = -gamma (Euler-Mascheroni constant).
+/// let psi1 = digamma(1.0);
+/// assert!((psi1 - (-0.5772156649)).abs() < 1e-8);
+///
+/// // Recurrence: psi(x+1) = psi(x) + 1/x.
+/// let x = 3.5;
+/// assert!((digamma(x + 1.0) - digamma(x) - 1.0 / x).abs() < 1e-10);
+///
+/// // Non-positive input returns NaN.
+/// assert!(digamma(0.0).is_nan());
+/// assert!(digamma(-1.0).is_nan());
+/// ```
 pub fn digamma(mut x: f64) -> f64 {
     if x <= 0.0 {
         return f64::NAN;
@@ -489,6 +686,25 @@ pub fn digamma(mut x: f64) -> f64 {
 ///   gives \(D_{1/2}^R(p \| q) = -2 \ln BC(p, q)\).
 /// - **Connection to alpha family**: \(BC = \rho_{1/2}(p, q)\), a special case of
 ///   [`rho_alpha`].
+///
+/// # Examples
+///
+/// ```
+/// # use logp::bhattacharyya_coeff;
+/// // BC(p, p) = 1.
+/// let p = [0.3, 0.7];
+/// assert!((bhattacharyya_coeff(&p, &p, 1e-9).unwrap() - 1.0).abs() < 1e-12);
+///
+/// // Disjoint supports: BC = 0.
+/// let a = [1.0, 0.0];
+/// let b = [0.0, 1.0];
+/// assert!(bhattacharyya_coeff(&a, &b, 1e-9).unwrap().abs() < 1e-15);
+///
+/// // BC is in [0, 1].
+/// let q = [0.5, 0.5];
+/// let bc = bhattacharyya_coeff(&p, &q, 1e-9).unwrap();
+/// assert!(bc >= 0.0 && bc <= 1.0);
+/// ```
 pub fn bhattacharyya_coeff(p: &[f64], q: &[f64], tol: f64) -> Result<f64> {
     ensure_same_len(p, q)?;
     validate_simplex(p, tol)?;
@@ -502,6 +718,19 @@ pub fn bhattacharyya_coeff(p: &[f64], q: &[f64], tol: f64) -> Result<f64> {
 }
 
 /// Bhattacharyya distance \(D_B(p,q) = -\ln BC(p,q)\).
+///
+/// # Examples
+///
+/// ```
+/// # use logp::bhattacharyya_distance;
+/// // D_B(p, p) = 0.
+/// let p = [0.4, 0.6];
+/// assert!(bhattacharyya_distance(&p, &p, 1e-9).unwrap().abs() < 1e-12);
+///
+/// // Non-negative for distinct distributions.
+/// let q = [0.5, 0.5];
+/// assert!(bhattacharyya_distance(&p, &q, 1e-9).unwrap() >= 0.0);
+/// ```
 pub fn bhattacharyya_distance(p: &[f64], q: &[f64], tol: f64) -> Result<f64> {
     let bc = bhattacharyya_coeff(p, q, tol)?;
     // When supports are disjoint, bc can be 0 (=> +∞ distance). Keep it explicit.
@@ -517,6 +746,20 @@ pub fn bhattacharyya_distance(p: &[f64], q: &[f64], tol: f64) -> Result<f64> {
 ///
 /// Bounded in \([0, 1]\). Equals the Amari \(\alpha\)-divergence at \(\alpha = 0\)
 /// (up to a factor of 2).
+///
+/// # Examples
+///
+/// ```
+/// # use logp::hellinger_squared;
+/// // H^2(p, p) = 0.
+/// let p = [0.25, 0.75];
+/// assert!(hellinger_squared(&p, &p, 1e-9).unwrap().abs() < 1e-15);
+///
+/// // Disjoint supports: H^2 = 1.
+/// let a = [1.0, 0.0];
+/// let b = [0.0, 1.0];
+/// assert!((hellinger_squared(&a, &b, 1e-9).unwrap() - 1.0).abs() < 1e-12);
+/// ```
 pub fn hellinger_squared(p: &[f64], q: &[f64], tol: f64) -> Result<f64> {
     let bc = bhattacharyya_coeff(p, q, tol)?;
     Ok((1.0 - bc).max(0.0))
@@ -528,6 +771,24 @@ pub fn hellinger_squared(p: &[f64], q: &[f64], tol: f64) -> Result<f64> {
 ///
 /// Unlike KL divergence, Hellinger is a **proper metric**: it is symmetric, satisfies
 /// the triangle inequality, and is bounded in \([0, 1]\).
+///
+/// # Examples
+///
+/// ```
+/// # use logp::hellinger;
+/// // H(p, p) = 0.
+/// let p = [0.3, 0.7];
+/// assert!(hellinger(&p, &p, 1e-9).unwrap().abs() < 1e-15);
+///
+/// // Symmetric: H(p, q) = H(q, p).
+/// let q = [0.5, 0.5];
+/// let h_pq = hellinger(&p, &q, 1e-9).unwrap();
+/// let h_qp = hellinger(&q, &p, 1e-9).unwrap();
+/// assert!((h_pq - h_qp).abs() < 1e-15);
+///
+/// // Bounded in [0, 1].
+/// assert!(h_pq >= 0.0 && h_pq <= 1.0);
+/// ```
 pub fn hellinger(p: &[f64], q: &[f64], tol: f64) -> Result<f64> {
     Ok(hellinger_squared(p, q, tol)?.sqrt())
 }
@@ -567,6 +828,22 @@ fn pow_nonneg(x: f64, a: f64) -> Result<f64> {
 /// - \(\rho_\alpha(p, p) = 1\) for all \(\alpha\) (since \(\sum p_i = 1\)).
 /// - By Holder's inequality, \(\rho_\alpha(p, q) \le 1\) for \(\alpha \in [0, 1]\).
 /// - Continuous and log-convex in \(\alpha\).
+///
+/// # Examples
+///
+/// ```
+/// # use logp::rho_alpha;
+/// // rho_alpha(p, p, alpha) = 1 for any alpha (since sum(p) = 1).
+/// let p = [0.2, 0.3, 0.5];
+/// assert!((rho_alpha(&p, &p, 0.5, 1e-9).unwrap() - 1.0).abs() < 1e-12);
+/// assert!((rho_alpha(&p, &p, 2.0, 1e-9).unwrap() - 1.0).abs() < 1e-12);
+///
+/// // At alpha = 0.5, rho equals the Bhattacharyya coefficient.
+/// let q = [0.5, 0.25, 0.25];
+/// let rho = rho_alpha(&p, &q, 0.5, 1e-9).unwrap();
+/// let bc = logp::bhattacharyya_coeff(&p, &q, 1e-9).unwrap();
+/// assert!((rho - bc).abs() < 1e-12);
+/// ```
 pub fn rho_alpha(p: &[f64], q: &[f64], alpha: f64, tol: f64) -> Result<f64> {
     ensure_same_len(p, q)?;
     validate_simplex(p, tol)?;
@@ -605,6 +882,22 @@ pub fn rho_alpha(p: &[f64], q: &[f64], alpha: f64, tol: f64) -> Result<f64> {
 /// # Domain
 ///
 /// \(\alpha > 0\), \(\alpha \ne 1\). Both `p` and `q` must be simplex distributions.
+///
+/// # Examples
+///
+/// ```
+/// # use logp::renyi_divergence;
+/// // D_alpha(p || p) = 0 for any valid alpha.
+/// let p = [0.3, 0.7];
+/// assert!(renyi_divergence(&p, &p, 2.0, 1e-9).unwrap().abs() < 1e-12);
+///
+/// // Non-negative.
+/// let q = [0.5, 0.5];
+/// assert!(renyi_divergence(&p, &q, 0.5, 1e-9).unwrap() >= -1e-12);
+///
+/// // alpha = 1.0 is forbidden (use KL instead).
+/// assert!(renyi_divergence(&p, &q, 1.0, 1e-9).is_err());
+/// ```
 pub fn renyi_divergence(p: &[f64], q: &[f64], alpha: f64, tol: f64) -> Result<f64> {
     if alpha == 1.0 {
         return Err(Error::InvalidAlpha {
@@ -639,6 +932,22 @@ pub fn renyi_divergence(p: &[f64], q: &[f64], alpha: f64, tol: f64) -> Result<f6
 /// # Domain
 ///
 /// \(\alpha \ne 1\). Both `p` and `q` must be simplex distributions.
+///
+/// # Examples
+///
+/// ```
+/// # use logp::tsallis_divergence;
+/// // D_alpha^T(p || p) = 0 for any valid alpha.
+/// let p = [0.4, 0.6];
+/// assert!(tsallis_divergence(&p, &p, 2.0, 1e-9).unwrap().abs() < 1e-12);
+///
+/// // Non-negative.
+/// let q = [0.5, 0.5];
+/// assert!(tsallis_divergence(&p, &q, 0.5, 1e-9).unwrap() >= -1e-12);
+///
+/// // alpha = 1.0 is forbidden.
+/// assert!(tsallis_divergence(&p, &q, 1.0, 1e-9).is_err());
+/// ```
 pub fn tsallis_divergence(p: &[f64], q: &[f64], alpha: f64, tol: f64) -> Result<f64> {
     if alpha == 1.0 {
         return Err(Error::InvalidAlpha {
@@ -667,6 +976,25 @@ pub fn tsallis_divergence(p: &[f64], q: &[f64], alpha: f64, tol: f64) -> Result<
 /// - **Non-negative**: \(D^\alpha(p : q) \ge 0\), with equality iff \(p = q\).
 /// - **Information geometry**: the Amari family parameterizes the \(\alpha\)-connections
 ///   on the statistical manifold (Amari & Nagaoka, 2000).
+///
+/// # Examples
+///
+/// ```
+/// # use logp::{amari_alpha_divergence, kl_divergence, hellinger_squared};
+/// let p = [0.3, 0.7];
+/// let q = [0.5, 0.5];
+/// let tol = 1e-9;
+///
+/// // alpha = -1 gives forward KL(p || q).
+/// let amari_neg1 = amari_alpha_divergence(&p, &q, -1.0, tol).unwrap();
+/// let kl_fwd = kl_divergence(&p, &q, tol).unwrap();
+/// assert!((amari_neg1 - kl_fwd).abs() < 1e-6);
+///
+/// // alpha = 0 gives 4 * H^2(p, q).
+/// let amari_0 = amari_alpha_divergence(&p, &q, 0.0, tol).unwrap();
+/// let h2 = hellinger_squared(&p, &q, tol).unwrap();
+/// assert!((amari_0 - 4.0 * h2).abs() < 1e-10);
+/// ```
 pub fn amari_alpha_divergence(p: &[f64], q: &[f64], alpha: f64, tol: f64) -> Result<f64> {
     if !alpha.is_finite() {
         return Err(Error::InvalidAlpha {
@@ -720,6 +1048,23 @@ pub fn amari_alpha_divergence(p: &[f64], q: &[f64], alpha: f64, tol: f64) -> Res
 /// When `q_i = 0`:
 /// - if `p_i = 0`, the contribution is treated as 0 (by continuity).
 /// - if `p_i > 0`, the divergence is infinite; we return an error.
+///
+/// # Examples
+///
+/// ```
+/// # use logp::{csiszar_f_divergence, kl_divergence};
+/// let p = [0.3, 0.7];
+/// let q = [0.5, 0.5];
+///
+/// // f(t) = t*ln(t) recovers KL divergence.
+/// let cs = csiszar_f_divergence(&p, &q, |t| t * t.ln(), 1e-9).unwrap();
+/// let kl = kl_divergence(&p, &q, 1e-9).unwrap();
+/// assert!((cs - kl).abs() < 1e-10);
+///
+/// // f(t) = (t - 1)^2 gives chi-squared divergence.
+/// let chi2 = csiszar_f_divergence(&p, &q, |t| (t - 1.0).powi(2), 1e-9).unwrap();
+/// assert!(chi2 >= 0.0);
+/// ```
 pub fn csiszar_f_divergence(p: &[f64], q: &[f64], f: impl Fn(f64) -> f64, tol: f64) -> Result<f64> {
     ensure_same_len(p, q)?;
     validate_simplex(p, tol)?;
@@ -765,6 +1110,24 @@ pub trait BregmanGenerator {
 /// - **Examples**: squared Euclidean (\(F = \tfrac{1}{2}\|x\|^2\)) gives
 ///   \(B_F(p,q) = \tfrac{1}{2}\|p - q\|^2\); negative entropy
 ///   (\(F = \sum x_i \ln x_i\)) gives the KL divergence.
+///
+/// # Examples
+///
+/// ```
+/// # use logp::{bregman_divergence, SquaredL2};
+/// // Squared-L2 generator: B_F(p, q) = 0.5 * ||p - q||^2.
+/// let gen = SquaredL2;
+/// let p = [1.0, 2.0, 3.0];
+/// let q = [1.5, 1.5, 2.5];
+/// let mut grad = [0.0; 3];
+/// let b = bregman_divergence(&gen, &p, &q, &mut grad).unwrap();
+/// let expected = 0.5 * ((0.5_f64).powi(2) + (0.5_f64).powi(2) + (0.5_f64).powi(2));
+/// assert!((b - expected).abs() < 1e-12);
+///
+/// // B_F(p, p) = 0.
+/// let mut grad2 = [0.0; 3];
+/// assert!(bregman_divergence(&gen, &p, &p, &mut grad2).unwrap().abs() < 1e-15);
+/// ```
 pub fn bregman_divergence(
     gen: &impl BregmanGenerator,
     p: &[f64],
@@ -789,6 +1152,23 @@ pub fn bregman_divergence(
 /// Total Bregman divergence as shown in Nielsen’s taxonomy diagram:
 ///
 /// \(tB_F(p,q) = \frac{B_F(p,q)}{\sqrt{1 + \|\nabla F(q)\|^2}}\).
+///
+/// # Examples
+///
+/// ```
+/// # use logp::{total_bregman_divergence, bregman_divergence, SquaredL2};
+/// let gen = SquaredL2;
+/// let p = [1.0, 2.0];
+/// let q = [3.0, 4.0];
+/// let mut grad = [0.0; 2];
+///
+/// let tb = total_bregman_divergence(&gen, &p, &q, &mut grad).unwrap();
+///
+/// // Total Bregman <= Bregman (normalization divides by >= 1).
+/// let mut grad2 = [0.0; 2];
+/// let b = bregman_divergence(&gen, &p, &q, &mut grad2).unwrap();
+/// assert!(tb <= b + 1e-12);
+/// ```
 pub fn total_bregman_divergence(
     gen: &impl BregmanGenerator,
     p: &[f64],
@@ -1300,5 +1680,81 @@ mod tests {
 
             prop_assert!((mi - kl).abs() < 1e-9, "mi={mi} kl={kl}");
         }
+
+        #[test]
+        fn hellinger_satisfies_triangle_inequality(
+            p in simplex_vec(8),
+            q in simplex_vec(8),
+            r in simplex_vec(8),
+        ) {
+            let h_pq = hellinger(&p, &q, 1e-6).unwrap();
+            let h_qr = hellinger(&q, &r, 1e-6).unwrap();
+            let h_pr = hellinger(&p, &r, 1e-6).unwrap();
+            prop_assert!(h_pr <= h_pq + h_qr + 1e-7, "h_pr={h_pr} h_pq+h_qr={}", h_pq + h_qr);
+        }
+    }
+
+    // --- total_bregman_divergence ---
+
+    #[test]
+    fn total_bregman_le_bregman() {
+        // tB_F(p, q) <= B_F(p, q) because the denominator sqrt(1 + ||grad||^2) >= 1.
+        let gen = SquaredL2;
+        let p = [1.0, 2.0, 3.0];
+        let q = [4.0, 5.0, 6.0];
+        let mut grad1 = [0.0; 3];
+        let mut grad2 = [0.0; 3];
+        let b = bregman_divergence(&gen, &p, &q, &mut grad1).unwrap();
+        let tb = total_bregman_divergence(&gen, &p, &q, &mut grad2).unwrap();
+        assert!(tb <= b + 1e-12, "total_bregman={tb} > bregman={b}");
+        assert!(tb >= 0.0);
+    }
+
+    #[test]
+    fn total_bregman_is_zero_for_identical() {
+        let gen = SquaredL2;
+        let p = [1.0, 2.0];
+        let mut grad = [0.0; 2];
+        let tb = total_bregman_divergence(&gen, &p, &p, &mut grad).unwrap();
+        assert!(tb.abs() < 1e-15);
+    }
+
+    // --- rho_alpha ---
+
+    #[test]
+    fn rho_alpha_self_is_one() {
+        let p = [0.1, 0.2, 0.3, 0.4];
+        for alpha in [0.0, 0.25, 0.5, 0.75, 1.0, 2.0, -1.0] {
+            let r = rho_alpha(&p, &p, alpha, TOL).unwrap();
+            assert!((r - 1.0).abs() < 1e-10, "rho_alpha(p,p,{alpha})={r}");
+        }
+    }
+
+    // --- digamma negative domain ---
+
+    #[test]
+    fn digamma_nonpositive_is_nan() {
+        assert!(digamma(0.0).is_nan());
+        assert!(digamma(-1.0).is_nan());
+        assert!(digamma(-100.0).is_nan());
+    }
+
+    // --- pmi edge cases ---
+
+    #[test]
+    fn pmi_zero_joint_returns_zero() {
+        assert_eq!(pmi(0.0, 0.5, 0.5), 0.0);
+    }
+
+    #[test]
+    fn pmi_zero_marginal_returns_zero() {
+        // When px or py is zero, return 0 by convention.
+        assert_eq!(pmi(0.1, 0.0, 0.5), 0.0);
+        assert_eq!(pmi(0.1, 0.5, 0.0), 0.0);
+    }
+
+    #[test]
+    fn pmi_all_zero_returns_zero() {
+        assert_eq!(pmi(0.0, 0.0, 0.0), 0.0);
     }
 }
