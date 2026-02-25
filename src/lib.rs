@@ -182,7 +182,20 @@ pub fn normalize_in_place(p: &mut [f64]) -> Result<f64> {
     Ok(s)
 }
 
-/// Shannon entropy \(H(p) = -\sum_i p_i \ln p_i\) (nats).
+/// Shannon entropy in nats: the expected surprise under distribution \(p\).
+///
+/// \[H(p) = -\sum_i p_i \ln p_i\]
+///
+/// # Key properties
+///
+/// - **Non-negative**: \(H(p) \ge 0\), with equality iff \(p\) is a delta (point mass).
+/// - **Maximized by uniform**: among distributions on \(n\) outcomes,
+///   \(H(p) \le \ln n\), with equality iff \(p_i = 1/n\) for all \(i\).
+/// - **Concavity**: \(H\) is a concave function of \(p\) on the simplex.
+///   Mixing distributions never decreases entropy.
+/// - **Units**: result is in nats (base \(e\)); divide by \(\ln 2\) for bits.
+///
+/// # Domain
 ///
 /// Requires `p` to be a valid simplex distribution (within `tol`).
 pub fn entropy_nats(p: &[f64], tol: f64) -> Result<f64> {
@@ -218,9 +231,23 @@ pub fn entropy_unchecked(p: &[f64]) -> f64 {
     h
 }
 
-/// Cross-entropy \(H(p,q) = -\sum_i p_i \ln q_i\) (nats).
+/// Cross-entropy in nats: the expected code length when using model \(q\) to encode
+/// data drawn from true distribution \(p\).
 ///
-/// Domain: `p` must be on the simplex; `q` must be nonnegative and normalized; and
+/// \[H(p, q) = -\sum_i p_i \ln q_i\]
+///
+/// # Key properties
+///
+/// - **Decomposition identity**: cross-entropy splits into entropy plus KL divergence:
+///   \(H(p, q) = H(p) + D_{KL}(p \| q)\).
+///   This means \(H(p, q) \ge H(p)\) with equality iff \(p = q\).
+/// - **Loss function**: minimizing \(H(p, q)\) over \(q\) is equivalent to minimizing
+///   \(D_{KL}(p \| q)\), which is why cross-entropy is the standard classification loss.
+/// - **Not symmetric**: \(H(p, q) \ne H(q, p)\) in general.
+///
+/// # Domain
+///
+/// `p` must be on the simplex; `q` must be nonnegative and normalized; and
 /// whenever `p_i > 0`, we require `q_i > 0` (otherwise cross-entropy is infinite).
 pub fn cross_entropy_nats(p: &[f64], q: &[f64], tol: f64) -> Result<f64> {
     validate_simplex(p, tol)?;
@@ -238,9 +265,27 @@ pub fn cross_entropy_nats(p: &[f64], q: &[f64], tol: f64) -> Result<f64> {
     Ok(h)
 }
 
-/// Kullback–Leibler divergence \(D_{KL}(p\|q) = \sum_i p_i \ln(p_i/q_i)\) (nats).
+/// Kullback--Leibler divergence in nats: the information lost when \(q\) is used to
+/// approximate \(p\).
 ///
-/// Domain: `p` and `q` must be valid simplex distributions; and whenever `p_i > 0`,
+/// \[D_{KL}(p \| q) = \sum_i p_i \ln \frac{p_i}{q_i}\]
+///
+/// # Key properties
+///
+/// - **Gibbs' inequality**: \(D_{KL}(p \| q) \ge 0\), with equality iff \(p = q\).
+///   This follows directly from Jensen's inequality applied to \(-\ln\).
+/// - **Not symmetric**: \(D_{KL}(p \| q) \ne D_{KL}(q \| p)\) in general;
+///   this is why KL is a divergence, not a distance.
+/// - **Not bounded above**: KL can be arbitrarily large when supports differ.
+/// - **Connection to MLE**: minimizing \(D_{KL}(p_{data} \| q_\theta)\) over \(\theta\)
+///   is equivalent to maximum likelihood estimation.
+/// - **Additive for independent distributions**: if \(p = p_1 \otimes p_2\) and
+///   \(q = q_1 \otimes q_2\), then
+///   \(D_{KL}(p \| q) = D_{KL}(p_1 \| q_1) + D_{KL}(p_2 \| q_2)\).
+///
+/// # Domain
+///
+/// `p` and `q` must be valid simplex distributions; and whenever `p_i > 0`,
 /// we require `q_i > 0`.
 pub fn kl_divergence(p: &[f64], q: &[f64], tol: f64) -> Result<f64> {
     ensure_same_len(p, q)?;
@@ -259,13 +304,26 @@ pub fn kl_divergence(p: &[f64], q: &[f64], tol: f64) -> Result<f64> {
     Ok(d)
 }
 
-/// Jensen–Shannon divergence (nats), defined as:
+/// Jensen--Shannon divergence in nats: a symmetric, bounded smoothing of KL divergence.
 ///
-/// \(JS(p,q) = \tfrac12 KL(p\|m) + \tfrac12 KL(q\|m)\), where \(m = \tfrac12(p+q)\).
+/// \[JS(p, q) = \tfrac{1}{2} D_{KL}(p \| m) + \tfrac{1}{2} D_{KL}(q \| m), \quad m = \tfrac{1}{2}(p + q)\]
 ///
-/// Domain: `p`, `q` must be simplex distributions.
+/// # Key properties
 ///
-/// Bound: \(0 \le JS(p,q) \le \ln 2\).
+/// - **Symmetric**: \(JS(p, q) = JS(q, p)\), unlike KL.
+/// - **Bounded**: \(0 \le JS(p, q) \le \ln 2\). The upper bound is attained when \(p\)
+///   and \(q\) have disjoint supports.
+/// - **Square root is a metric**: \(\sqrt{JS(p, q)}\) satisfies the triangle inequality
+///   (Endres & Schindelin, 2003), so it can be used as a proper distance function.
+/// - **Connection to mutual information**: \(JS(p, q) = I(X; Z)\) where \(Z\) is a
+///   fair coin selecting between \(p\) and \(q\), and \(X\) is drawn from the selected
+///   distribution.
+/// - **Always finite**: because \(m_i > 0\) whenever \(p_i > 0\) or \(q_i > 0\), the
+///   KL terms are always well-defined (no division by zero).
+///
+/// # Domain
+///
+/// `p`, `q` must be simplex distributions.
 pub fn jensen_shannon_divergence(p: &[f64], q: &[f64], tol: f64) -> Result<f64> {
     ensure_same_len(p, q)?;
     validate_simplex(p, tol)?;
@@ -279,7 +337,23 @@ pub fn jensen_shannon_divergence(p: &[f64], q: &[f64], tol: f64) -> Result<f64> 
     Ok(0.5 * kl_divergence(p, &m, tol)? + 0.5 * kl_divergence(q, &m, tol)?)
 }
 
-/// Mutual Information \(I(X;Y) = \sum_{x,y} p(x,y) \ln \frac{p(x,y)}{p(x)p(y)}\).
+/// Mutual information in nats: how much knowing \(Y\) reduces uncertainty about \(X\).
+///
+/// \[I(X; Y) = \sum_{x,y} p(x,y) \ln \frac{p(x,y)}{p(x)\,p(y)}\]
+///
+/// # Key properties
+///
+/// - **KL form**: \(I(X; Y) = D_{KL}\bigl(p(x,y) \;\|\; p(x)\,p(y)\bigr)\), measuring
+///   how far the joint distribution is from the product of its marginals.
+/// - **Non-negative**: \(I(X; Y) \ge 0\), with equality iff \(X\) and \(Y\) are
+///   independent.
+/// - **Symmetric**: \(I(X; Y) = I(Y; X)\).
+/// - **Bounded by entropy**: \(I(X; Y) \le \min\{H(X),\, H(Y)\}\).
+/// - **Data processing inequality**: for any Markov chain \(X \to Y \to Z\),
+///   \(I(X; Z) \le I(X; Y)\). Processing cannot create information.
+/// - **Entropy decomposition**: \(I(X; Y) = H(X) + H(Y) - H(X, Y) = H(X) - H(X|Y)\).
+///
+/// # Layout
 ///
 /// For discrete distributions, given a **row-major** joint distribution table `p_xy`
 /// with shape `(n_x, n_y)`.
@@ -336,7 +410,21 @@ pub fn mutual_information_ndarray(p_xy: &ndarray::Array2<f64>, tol: f64) -> Resu
     mutual_information(&flat, n_x, n_y, tol)
 }
 
-/// Pointwise Mutual Information \(PMI(x;y) = \ln \frac{p(x,y)}{p(x)p(y)}\).
+/// Pointwise mutual information: the log-ratio measuring how much more (or less)
+/// likely two specific outcomes co-occur than if they were independent.
+///
+/// \[PMI(x; y) = \ln \frac{p(x, y)}{p(x)\,p(y)}\]
+///
+/// # Key properties
+///
+/// - **Sign**: positive when \(x\) and \(y\) co-occur more than chance; negative when
+///   less; zero when independent.
+/// - **Unbounded**: \(PMI \in (-\infty, -\ln p(x,y)]\). In practice, rare events yield
+///   very large PMI, which is why PPMI (positive PMI, clamped at 0) is common.
+/// - **Connection to mutual information**: \(I(X; Y) = \mathbb{E}_{p(x,y)}[PMI(x; y)]\).
+///   MI is the expected value of PMI over the joint distribution.
+/// - **Connection to word2vec**: Levy & Goldberg (2014) showed that Skip-gram with
+///   negative sampling implicitly factorizes a PMI matrix (shifted by \(\ln k\)).
 pub fn pmi(pxy: f64, px: f64, py: f64) -> f64 {
     if pxy <= 0.0 || px <= 0.0 || py <= 0.0 {
         0.0
@@ -345,10 +433,29 @@ pub fn pmi(pxy: f64, px: f64, py: f64) -> f64 {
     }
 }
 
-/// Digamma function \(\psi(x)\), the logarithmic derivative of the Gamma function.
+/// Digamma function: the logarithmic derivative of the Gamma function.
 ///
-/// Required for KSG Mutual Information estimation.
-/// Uses the asymptotic expansion for large x and the recurrence \(\psi(x+1) = \psi(x) + 1/x\).
+/// \[\psi(x) = \frac{d}{dx} \ln \Gamma(x) = \frac{\Gamma'(x)}{\Gamma(x)}\]
+///
+/// # Key properties
+///
+/// - **Recurrence**: \(\psi(x+1) = \psi(x) + \frac{1}{x}\), which follows from
+///   \(\Gamma(x+1) = x\,\Gamma(x)\).
+/// - **Special value**: \(\psi(1) = -\gamma \approx -0.5772\), where \(\gamma\) is
+///   the Euler--Mascheroni constant.
+/// - **Asymptotic**: \(\psi(x) \sim \ln x - \frac{1}{2x}\) for large \(x\).
+/// - **Why it appears here**: the KSG estimator for mutual information
+///   ([`mutual_information_ksg`]) uses digamma to correct for the bias of
+///   nearest-neighbor density estimates.
+///
+/// # Domain
+///
+/// Defined for \(x > 0\). Returns `NaN` for \(x \le 0\).
+///
+/// # Implementation
+///
+/// Uses the recurrence to shift small \(x\) up to \(x \ge 7\), then applies the
+/// asymptotic expansion with Bernoulli-number correction terms.
 pub fn digamma(mut x: f64) -> f64 {
     if x <= 0.0 {
         return f64::NAN;
@@ -365,9 +472,23 @@ pub fn digamma(mut x: f64) -> f64 {
     result
 }
 
-/// Bhattacharyya coefficient \(BC(p,q) = \sum_i \sqrt{p_i q_i}\).
+/// Bhattacharyya coefficient: the geometric-mean overlap between two distributions.
 ///
-/// For simplex distributions, \(BC \in \[0,1\]\).
+/// \[BC(p, q) = \sum_i \sqrt{p_i \, q_i}\]
+///
+/// # Key properties
+///
+/// - **Geometric mean interpretation**: each term \(\sqrt{p_i q_i}\) is the geometric
+///   mean of the two probabilities at bin \(i\). BC sums these, measuring how much
+///   the distributions overlap.
+/// - **Bounded**: \(BC \in [0, 1]\). Equals 1 iff \(p = q\); equals 0 iff supports
+///   are disjoint.
+/// - **Relationship to Hellinger**: \(H^2(p, q) = 1 - BC(p, q)\), so the squared
+///   Hellinger distance is just one minus the Bhattacharyya coefficient.
+/// - **Relationship to Renyi**: at \(\alpha = \tfrac{1}{2}\), the Renyi divergence
+///   gives \(D_{1/2}^R(p \| q) = -2 \ln BC(p, q)\).
+/// - **Connection to alpha family**: \(BC = \rho_{1/2}(p, q)\), a special case of
+///   [`rho_alpha`].
 pub fn bhattacharyya_coeff(p: &[f64], q: &[f64], tol: f64) -> Result<f64> {
     ensure_same_len(p, q)?;
     validate_simplex(p, tol)?;
@@ -390,13 +511,23 @@ pub fn bhattacharyya_distance(p: &[f64], q: &[f64], tol: f64) -> Result<f64> {
     Ok(-bc.ln())
 }
 
-/// Squared Hellinger distance: \(H^2(p,q) = 1 - \sum_i \sqrt{p_i q_i}\).
+/// Squared Hellinger distance: one minus the Bhattacharyya coefficient.
+///
+/// \[H^2(p, q) = 1 - \sum_i \sqrt{p_i \, q_i} = 1 - BC(p, q)\]
+///
+/// Bounded in \([0, 1]\). Equals the Amari \(\alpha\)-divergence at \(\alpha = 0\)
+/// (up to a factor of 2).
 pub fn hellinger_squared(p: &[f64], q: &[f64], tol: f64) -> Result<f64> {
     let bc = bhattacharyya_coeff(p, q, tol)?;
     Ok((1.0 - bc).max(0.0))
 }
 
-/// Hellinger distance \(H(p,q) = \sqrt{H^2(p,q)}\).
+/// Hellinger distance: the square root of the squared Hellinger distance.
+///
+/// \[H(p, q) = \sqrt{1 - BC(p, q)}\]
+///
+/// Unlike KL divergence, Hellinger is a **proper metric**: it is symmetric, satisfies
+/// the triangle inequality, and is bounded in \([0, 1]\).
 pub fn hellinger(p: &[f64], q: &[f64], tol: f64) -> Result<f64> {
     Ok(hellinger_squared(p, q, tol)?.sqrt())
 }
@@ -418,9 +549,24 @@ fn pow_nonneg(x: f64, a: f64) -> Result<f64> {
     Ok(x.powf(a))
 }
 
-/// $\rho_\alpha(p,q) = \sum_i p_i^\alpha q_i^{1-\alpha}$.
+/// Alpha-integral: the workhorse behind the entire alpha-family of divergences.
 ///
-/// This coefficient underlies Rényi/Tsallis/Bhattacharyya/Chernoff families.
+/// \[\rho_\alpha(p, q) = \sum_i p_i^\alpha \, q_i^{1-\alpha}\]
+///
+/// # Why this matters
+///
+/// This single quantity generates multiple divergence families via simple transforms:
+///
+/// - **Renyi**: \(D_\alpha^R = \frac{1}{\alpha - 1} \ln \rho_\alpha\)
+/// - **Tsallis**: \(D_\alpha^T = \frac{\rho_\alpha - 1}{\alpha - 1}\)
+/// - **Bhattacharyya coefficient**: \(BC = \rho_{1/2}\)
+/// - **Chernoff information**: \(\min_\alpha (-\ln \rho_\alpha)\)
+///
+/// # Key properties
+///
+/// - \(\rho_\alpha(p, p) = 1\) for all \(\alpha\) (since \(\sum p_i = 1\)).
+/// - By Holder's inequality, \(\rho_\alpha(p, q) \le 1\) for \(\alpha \in [0, 1]\).
+/// - Continuous and log-convex in \(\alpha\).
 pub fn rho_alpha(p: &[f64], q: &[f64], alpha: f64, tol: f64) -> Result<f64> {
     ensure_same_len(p, q)?;
     validate_simplex(p, tol)?;
@@ -440,9 +586,25 @@ pub fn rho_alpha(p: &[f64], q: &[f64], alpha: f64, tol: f64) -> Result<f64> {
     Ok(s)
 }
 
-/// Rényi divergence (nats):
+/// Renyi divergence in nats: a one-parameter family that interpolates between
+/// different notions of distributional difference.
 ///
-/// $D_\alpha^R(p\|q) = \frac{1}{\alpha-1}\ln \rho_\alpha(p,q)$, $\alpha>0, \alpha \ne 1$.
+/// \[D_\alpha^R(p \| q) = \frac{1}{\alpha - 1} \ln \rho_\alpha(p, q), \quad \alpha > 0,\; \alpha \ne 1\]
+///
+/// # Key properties
+///
+/// - **Limit to KL**: \(\lim_{\alpha \to 1} D_\alpha^R(p \| q) = D_{KL}(p \| q)\)
+///   by L'Hopital's rule (the logarithm and denominator both vanish).
+/// - **Alpha = 1/2**: \(D_{1/2}^R = -2 \ln BC(p, q)\), twice the negative log
+///   Bhattacharyya coefficient.
+/// - **Alpha = infinity**: \(D_\infty^R = \ln \max_i (p_i / q_i)\), the log of the
+///   maximum likelihood ratio. This bounds all other Renyi orders.
+/// - **Monotone in alpha**: \(D_\alpha^R\) is non-decreasing in \(\alpha\).
+/// - **Non-negative**: \(D_\alpha^R(p \| q) \ge 0\), with equality iff \(p = q\).
+///
+/// # Domain
+///
+/// \(\alpha > 0\), \(\alpha \ne 1\). Both `p` and `q` must be simplex distributions.
 pub fn renyi_divergence(p: &[f64], q: &[f64], alpha: f64, tol: f64) -> Result<f64> {
     if alpha == 1.0 {
         return Err(Error::InvalidAlpha {
@@ -457,9 +619,26 @@ pub fn renyi_divergence(p: &[f64], q: &[f64], alpha: f64, tol: f64) -> Result<f6
     Ok(rho.ln() / (alpha - 1.0))
 }
 
-/// Tsallis divergence:
+/// Tsallis divergence: a non-extensive generalization of KL divergence from
+/// statistical mechanics.
 ///
-/// $D_\alpha^T(p\|q) = \frac{\rho_\alpha(p,q) - 1}{\alpha-1}$, $\alpha \ne 1$.
+/// \[D_\alpha^T(p \| q) = \frac{\rho_\alpha(p, q) - 1}{\alpha - 1}, \quad \alpha \ne 1\]
+///
+/// # Key properties
+///
+/// - **Limit to KL**: \(\lim_{\alpha \to 1} D_\alpha^T(p \| q) = D_{KL}(p \| q)\),
+///   same limit as Renyi but via a different path.
+/// - **Connection to Renyi via deformed logarithm**: Tsallis uses the q-logarithm
+///   \(\ln_q(x) = \frac{x^{1-q} - 1}{1-q}\) where Renyi uses the ordinary log.
+///   Formally: \(D_\alpha^T = \frac{e^{(\alpha-1) D_\alpha^R} - 1}{\alpha - 1}\).
+/// - **Non-extensive**: for independent systems, Tsallis divergence is **not** additive
+///   (unlike KL and Renyi). This property is intentional and models systems with
+///   long-range correlations in statistical physics.
+/// - **Non-negative**: \(D_\alpha^T(p \| q) \ge 0\), with equality iff \(p = q\).
+///
+/// # Domain
+///
+/// \(\alpha \ne 1\). Both `p` and `q` must be simplex distributions.
 pub fn tsallis_divergence(p: &[f64], q: &[f64], alpha: f64, tol: f64) -> Result<f64> {
     if alpha == 1.0 {
         return Err(Error::InvalidAlpha {
@@ -470,14 +649,24 @@ pub fn tsallis_divergence(p: &[f64], q: &[f64], alpha: f64, tol: f64) -> Result<
     Ok((rho_alpha(p, q, alpha, tol)? - 1.0) / (alpha - 1.0))
 }
 
-/// Amari $\alpha$-divergence (Amari parameter $\alpha\in\mathbb{R}$).
+/// Amari alpha-divergence: a one-parameter family from information geometry that
+/// continuously interpolates between forward KL, reverse KL, and squared Hellinger.
 ///
-/// For $\alpha \notin \{-1,1\}$:
-/// $D^\alpha(p:q) = \frac{4}{1-\alpha^2}\left(1 - \rho_{\frac{1-\alpha}{2}}(p,q)\right)$.
+/// For \(\alpha \notin \{-1, 1\}\):
 ///
-/// Limits:
-/// - $D^{-1}(p:q) = KL(p\|q)$
-/// - $D^{1}(p:q) = KL(q\|p)$
+/// \[D^\alpha(p : q) = \frac{4}{1 - \alpha^2}\left(1 - \rho_{\frac{1-\alpha}{2}}(p, q)\right)\]
+///
+/// # Key properties
+///
+/// - **\(\alpha = -1\)**: recovers \(D_{KL}(p \| q)\), the forward KL divergence.
+/// - **\(\alpha = +1\)**: recovers \(D_{KL}(q \| p)\), the reverse KL divergence.
+/// - **\(\alpha = 0\)**: gives \(4(1 - BC(p,q)) = 4\,H^2(p,q)\), proportional to
+///   the squared Hellinger distance.
+/// - **Duality**: \(D^\alpha(p : q) = D^{-\alpha}(q : p)\). Swapping the sign of
+///   \(\alpha\) is the same as swapping the arguments.
+/// - **Non-negative**: \(D^\alpha(p : q) \ge 0\), with equality iff \(p = q\).
+/// - **Information geometry**: the Amari family parameterizes the \(\alpha\)-connections
+///   on the statistical manifold (Amari & Nagaoka, 2000).
 pub fn amari_alpha_divergence(p: &[f64], q: &[f64], alpha: f64, tol: f64) -> Result<f64> {
     if !alpha.is_finite() {
         return Err(Error::InvalidAlpha {
@@ -498,9 +687,35 @@ pub fn amari_alpha_divergence(p: &[f64], q: &[f64], alpha: f64, tol: f64) -> Res
     Ok((4.0 / (1.0 - alpha * alpha)) * (1.0 - rho))
 }
 
-/// A Csiszár \(f\)-divergence with the standard form:
+/// Csiszar f-divergence: the most general class of divergences that respect
+/// sufficient statistics (information monotonicity).
 ///
-/// \(D_f(p\|q) = \sum_i q_i f(p_i / q_i)\).
+/// \[D_f(p \| q) = \sum_i q_i \, f\!\left(\frac{p_i}{q_i}\right)\]
+///
+/// where \(f\) is a convex function with \(f(1) = 0\).
+///
+/// # Information monotonicity theorem
+///
+/// The defining property of f-divergences (Csiszar, 1967): for any Markov kernel
+/// (stochastic map) \(T\),
+///
+/// \[D_f(Tp \| Tq) \le D_f(p \| q)\]
+///
+/// Coarse-graining (merging bins) cannot increase the divergence. This is the
+/// information-theoretic analogue of the data processing inequality.
+///
+/// # Common f-generators
+///
+/// | Divergence | \(f(t)\) |
+/// |---|---|
+/// | KL divergence | \(t \ln t\) |
+/// | Reverse KL | \(-\ln t\) |
+/// | Squared Hellinger | \((\sqrt{t} - 1)^2\) |
+/// | Total variation | \(\tfrac{1}{2} |t - 1|\) |
+/// | Chi-squared | \((t - 1)^2\) |
+/// | Jensen-Shannon | \(t \ln t - (1+t) \ln \tfrac{1+t}{2}\) |
+///
+/// # Edge cases
 ///
 /// When `q_i = 0`:
 /// - if `p_i = 0`, the contribution is treated as 0 (by continuity).
@@ -532,7 +747,24 @@ pub trait BregmanGenerator {
     fn grad_into(&self, x: &[f64], out: &mut [f64]) -> Result<()>;
 }
 
-/// Bregman divergence \(B_F(p,q) = F(p) - F(q) - \langle p-q, \nabla F(q)\rangle\).
+/// Bregman divergence: the gap between a convex function and its tangent approximation.
+///
+/// \[B_F(p, q) = F(p) - F(q) - \langle p - q,\, \nabla F(q) \rangle\]
+///
+/// # Key properties
+///
+/// - **Non-negative**: \(B_F(p, q) \ge 0\) by convexity of \(F\), with equality iff
+///   \(p = q\).
+/// - **Not symmetric** in general: \(B_F(p, q) \ne B_F(q, p)\).
+/// - **Generalized Pythagorean theorem**: for an affine subspace \(S\) and its
+///   Bregman projection \(q^* = \arg\min_{q \in S} B_F(p, q)\), the three-point
+///   identity holds: \(B_F(p, q) = B_F(p, q^*) + B_F(q^*, q)\) for all \(q \in S\).
+///   This is the foundation of dually flat geometry (Amari).
+/// - **Not an f-divergence**: Bregman divergences are **not** information monotone
+///   in general. They live in a different branch of the divergence taxonomy.
+/// - **Examples**: squared Euclidean (\(F = \tfrac{1}{2}\|x\|^2\)) gives
+///   \(B_F(p,q) = \tfrac{1}{2}\|p - q\|^2\); negative entropy
+///   (\(F = \sum x_i \ln x_i\)) gives the KL divergence.
 pub fn bregman_divergence(
     gen: &impl BregmanGenerator,
     p: &[f64],
