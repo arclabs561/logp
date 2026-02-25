@@ -44,7 +44,7 @@ cargo run --example ksg_mutual_information  # KSG estimator on correlated Gaussi
 cargo test -p logp
 ```
 
-44 tests covering all public API functions, including property-based tests for KL non-negativity, Pinsker's inequality, JS boundedness, sqrt(JS) triangle inequality, Renyi limit to KL, Amari alpha-KL correspondence, Csiszar f-divergence with KL generator, digamma recurrence, PMI, and KSG estimator.
+76 tests (52 unit + 24 doc-tests) covering all public API functions, including property-based tests for KL non-negativity, Pinsker's inequality, JS boundedness, sqrt(JS) triangle inequality, Hellinger triangle inequality, Renyi limit to KL, Amari alpha-KL correspondence, Csiszar f-divergence with KL generator, total Bregman normalization, digamma recurrence/domain, PMI edge cases, and KSG estimator.
 
 ## License
 
