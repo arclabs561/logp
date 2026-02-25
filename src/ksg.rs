@@ -20,6 +20,20 @@ pub enum KsgVariant {
 /// * `y` - Samples from Y (N x Dy)
 /// * `k` - Number of neighbors (typically 3-5)
 /// * `variant` - KSG Algorithm 1 or 2
+///
+/// # Examples
+///
+/// ```
+/// # use logp::{mutual_information_ksg, KsgVariant};
+/// // Perfectly correlated (Y = X): MI should be substantially positive.
+/// let x: Vec<Vec<f64>> = (0..30).map(|i| vec![i as f64 / 30.0]).collect();
+/// let y_corr = x.clone();
+/// let mi = mutual_information_ksg(&x, &y_corr, 3, KsgVariant::Alg1).unwrap();
+/// assert!(mi > 0.0);
+///
+/// // Result is finite.
+/// assert!(mi.is_finite());
+/// ```
 pub fn mutual_information_ksg(
     x: &[Vec<f64>],
     y: &[Vec<f64>],
