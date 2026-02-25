@@ -30,13 +30,21 @@ let js = jensen_shannon_divergence(&p, &q, 1e-9).unwrap(); // JS divergence
 
 The `tol` parameter controls how strictly inputs are validated as probability distributions. Use `1e-9` for normalized inputs; use `1e-6` if inputs may have minor floating-point drift.
 
+## Examples
+
+```bash
+cargo run --example divergence_landscape    # sweep KL/JS/Hellinger/Renyi/Tsallis on binary distributions
+cargo run --example text_similarity         # bag-of-words JS divergence between documents
+cargo run --example ksg_mutual_information  # KSG estimator on correlated Gaussians vs theory
+```
+
 ## Tests
 
 ```bash
 cargo test -p logp
 ```
 
-17 tests including property-based tests for KL non-negativity, Pinsker's inequality, JS boundedness, sqrt(JS) triangle inequality, and KSG estimator behavior.
+44 tests covering all public API functions, including property-based tests for KL non-negativity, Pinsker's inequality, JS boundedness, sqrt(JS) triangle inequality, Renyi limit to KL, Amari alpha-KL correspondence, Csiszar f-divergence with KL generator, digamma recurrence, PMI, and KSG estimator.
 
 ## License
 
