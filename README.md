@@ -2,11 +2,15 @@
 
 Information theory primitives: entropies and divergences.
 
-Dual-licensed under MIT or Apache-2.0.
+## What it provides
 
-[crates.io](https://crates.io/crates/logp) | [docs.rs](https://docs.rs/logp)
+**Entropies**: Shannon (nats/bits), cross-entropy, mutual information (discrete + KSG continuous estimator).
 
-## Quickstart
+**Divergences**: KL, Jensen-Shannon, Hellinger, Bhattacharyya, Renyi, Tsallis, Amari alpha-family, Csiszar f-divergences, Bregman divergences.
+
+**Gaussian KL**: Closed-form KL between diagonal Gaussians.
+
+## Usage
 
 ```toml
 [dependencies]
@@ -16,30 +20,24 @@ logp = "0.1.0"
 ```rust
 use logp::{entropy_nats, kl_divergence, jensen_shannon_divergence};
 
-let p = [0.1, 0.9];
-let q = [0.9, 0.1];
+let p = [0.25, 0.75];
+let q = [0.5, 0.5];
 
-// Shannon entropy in nats
-let h = entropy_nats(&p, 1e-9).unwrap();
-
-// Relative entropy (KL)
-let kl = kl_divergence(&p, &q, 1e-9).unwrap();
-
-// Symmetric, bounded Jensen-Shannon
-let js = jensen_shannon_divergence(&p, &q, 1e-9).unwrap();
+let h = entropy_nats(&p, 1e-9).unwrap();          // Shannon entropy
+let kl = kl_divergence(&p, &q, 1e-9).unwrap();    // KL(p || q)
+let js = jensen_shannon_divergence(&p, &q, 1e-9).unwrap(); // JS divergence
 ```
 
-## Taxonomy of Divergences
+The `tol` parameter controls how strictly inputs are validated as probability distributions. Use `1e-9` for normalized inputs; use `1e-6` if inputs may have minor floating-point drift.
 
-| Family | Generator | Key Property |
-|---|---|---|
-| **f-divergences** | Convex $f(t)$ with $f(1)=0$ | Monotone under Markov morphisms (coarse-graining) |
-| **Bregman** | Convex $F(x)$ | Dually flat geometry; generalized Pythagorean theorem |
-| **Jensen-Shannon** | $f$-div + metric | Symmetric, bounded $[0, \ln 2]$, $\sqrt{JS}$ is a metric |
-| **Alpha** | $\rho_\alpha = \int p^\alpha q^{1-\alpha}$ | Encodes Rényi, Tsallis, Bhattacharyya, Hellinger |
+## Tests
 
-## Connections
+```bash
+cargo test -p logp
+```
 
-- [`rkhs`](https://github.com/arclabs561/rkhs): MMD and KL both measure distribution "distance"
-- [`wass`](https://github.com/arclabs561/wass): Wasserstein vs entropy-based divergences
-- [`fynch`](https://github.com/arclabs561/fynch): Temperature scaling affects entropy calibration
+17 tests including property-based tests for KL non-negativity, Pinsker's inequality, JS boundedness, sqrt(JS) triangle inequality, and KSG estimator behavior.
+
+## License
+
+MIT OR Apache-2.0
