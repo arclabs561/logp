@@ -1,6 +1,21 @@
-//! Kraskov-Stögbauer-Grassberger (KSG) Mutual Information Estimator.
+//! Kraskov-Stogbauer-Grassberger (KSG) Mutual Information Estimator.
 //!
 //! Gold standard for non-parametric MI estimation from continuous samples.
+//!
+//! # References
+//!
+//! - Kraskov, Stogbauer, Grassberger (2004). "Estimating Mutual Information" -- the
+//!   original KSG estimator defining Algorithms 1 and 2
+//! - Gao, Oh, Viswanath (2016). "Demystifying Fixed k-Nearest Neighbor Information
+//!   Estimators" -- first rigorous convergence analysis and consistency proof for KSG
+//! - Abdelaleem, Martini, Nemenman (2025). "Accurate Estimation of MI in High
+//!   Dimensional Data" -- bias correction and error bar estimation for high-d KSG
+//! - Leung, Ghosh, Motani (TMLR). "Towards Robust Scale-Invariant MI Estimators"
+//!   -- KSG has large negative bias in high dimensions; proposes scale-invariant variant
+//! - Witter & Houghton (2024). "Nearest-Neighbours Estimators for Conditional MI"
+//!   -- extends KSG to I(X;Y|Z); potential future `conditional_mi_ksg` function
+//! - Marx & Fischer (2021). "Estimating MI via Geodesic kNN" -- manifold-aware
+//!   distances instead of Euclidean kNN; useful when data lies on curved manifolds
 
 use crate::{digamma, Error, Result};
 
