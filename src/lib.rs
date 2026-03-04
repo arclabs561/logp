@@ -613,6 +613,66 @@ pub fn pmi(pxy: f64, px: f64, py: f64) -> f64 {
     }
 }
 
+/// Log-sum-exp: numerically stable computation of `ln(exp(a_1) + ... + exp(a_n))`.
+///
+/// This is the fundamental primitive for working in log-probability space.
+/// The naive `values.iter().map(|v| v.exp()).sum::<f64>().ln()` overflows
+/// for large values and underflows for small ones; the max-shift trick
+/// avoids both.
+///
+/// Returns `NEG_INFINITY` for an empty slice.
+///
+/// # Examples
+///
+/// ```
+/// # use logp::log_sum_exp;
+/// // ln(e^0 + e^0) = ln(2)
+/// let lse = log_sum_exp(&[0.0, 0.0]);
+/// assert!((lse - 2.0_f64.ln()).abs() < 1e-12);
+///
+/// // Dominated term: ln(e^1000 + e^0) ≈ 1000
+/// let lse = log_sum_exp(&[1000.0, 0.0]);
+/// assert!((lse - 1000.0).abs() < 1e-10);
+///
+/// // Single element: identity.
+/// assert_eq!(log_sum_exp(&[42.0]), 42.0);
+///
+/// // Empty: -inf.
+/// assert_eq!(log_sum_exp(&[]), f64::NEG_INFINITY);
+/// ```
+#[inline]
+pub fn log_sum_exp(values: &[f64]) -> f64 {
+    if values.is_empty() {
+        return f64::NEG_INFINITY;
+    }
+    let max = values.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+    if max.is_infinite() {
+        return max;
+    }
+    let sum: f64 = values.iter().map(|v| (v - max).exp()).sum();
+    max + sum.ln()
+}
+
+/// Log-sum-exp for two values (common special case).
+///
+/// Equivalent to `log_sum_exp(&[a, b])` but avoids the slice overhead.
+///
+/// # Examples
+///
+/// ```
+/// # use logp::log_sum_exp2;
+/// let lse = log_sum_exp2(0.0, 0.0);
+/// assert!((lse - 2.0_f64.ln()).abs() < 1e-12);
+/// ```
+#[inline]
+pub fn log_sum_exp2(a: f64, b: f64) -> f64 {
+    let max = a.max(b);
+    if max.is_infinite() {
+        return max;
+    }
+    max + ((a - max).exp() + (b - max).exp()).ln()
+}
+
 /// Digamma function: the logarithmic derivative of the Gamma function.
 ///
 /// \[\psi(x) = \frac{d}{dx} \ln \Gamma(x) = \frac{\Gamma'(x)}{\Gamma(x)}\]
