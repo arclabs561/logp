@@ -1,5 +1,9 @@
 # logp
 
+[![crates.io](https://img.shields.io/crates/v/logp.svg)](https://crates.io/crates/logp)
+[![Documentation](https://docs.rs/logp/badge.svg)](https://docs.rs/logp)
+[![CI](https://github.com/arclabs561/logp/actions/workflows/ci.yml/badge.svg)](https://github.com/arclabs561/logp/actions/workflows/ci.yml)
+
 Information theory primitives: entropies and divergences.
 
 ## Problem
