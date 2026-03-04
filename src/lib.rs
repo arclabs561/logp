@@ -1397,7 +1397,10 @@ mod tests {
             let p: Vec<f64> = vec![1.0 / n as f64; n];
             let h = entropy_nats(&p, TOL).unwrap();
             let expected = (n as f64).ln();
-            assert!((h - expected).abs() < 1e-12, "n={n}: h={h} expected={expected}");
+            assert!(
+                (h - expected).abs() < 1e-12,
+                "n={n}: h={h} expected={expected}"
+            );
         }
     }
 
@@ -1543,7 +1546,10 @@ mod tests {
         for &x in &[1.0, 2.0, 3.5, 10.0] {
             let lhs = digamma(x + 1.0);
             let rhs = digamma(x) + 1.0 / x;
-            assert!((lhs - rhs).abs() < 1e-8, "recurrence at x={x}: {lhs} vs {rhs}");
+            assert!(
+                (lhs - rhs).abs() < 1e-8,
+                "recurrence at x={x}: {lhs} vs {rhs}"
+            );
         }
     }
 
@@ -1551,14 +1557,20 @@ mod tests {
     fn pmi_independent_is_zero() {
         // PMI(x,y) = log(p(x,y) / (p(x)*p(y))). If independent: p(x,y) = p(x)*p(y)
         let pmi_val = pmi(0.06, 0.3, 0.2); // 0.3 * 0.2 = 0.06
-        assert!(pmi_val.abs() < 1e-10, "PMI of independent events should be 0: {pmi_val}");
+        assert!(
+            pmi_val.abs() < 1e-10,
+            "PMI of independent events should be 0: {pmi_val}"
+        );
     }
 
     #[test]
     fn pmi_positive_for_correlated() {
         // If p(x,y) > p(x)*p(y), events are positively correlated
         let pmi_val = pmi(0.4, 0.5, 0.5); // 0.4 > 0.5*0.5 = 0.25
-        assert!(pmi_val > 0.0, "correlated events should have positive PMI: {pmi_val}");
+        assert!(
+            pmi_val > 0.0,
+            "correlated events should have positive PMI: {pmi_val}"
+        );
     }
 
     #[test]
@@ -1582,7 +1594,10 @@ mod tests {
         let tol = 1e-9;
         let kl_pq = kl_divergence(&p, &q, tol).unwrap();
         let amari = amari_alpha_divergence(&p, &q, -1.0, tol).unwrap();
-        assert!((amari - kl_pq).abs() < 1e-6, "Amari(-1)={amari}, KL(p||q)={kl_pq}");
+        assert!(
+            (amari - kl_pq).abs() < 1e-6,
+            "Amari(-1)={amari}, KL(p||q)={kl_pq}"
+        );
     }
 
     #[test]
@@ -1593,7 +1608,10 @@ mod tests {
         let tol = 1e-9;
         let kl_qp = kl_divergence(&q, &p, tol).unwrap();
         let amari = amari_alpha_divergence(&p, &q, 1.0, tol).unwrap();
-        assert!((amari - kl_qp).abs() < 1e-6, "Amari(1)={amari}, KL(q||p)={kl_qp}");
+        assert!(
+            (amari - kl_qp).abs() < 1e-6,
+            "Amari(1)={amari}, KL(q||p)={kl_qp}"
+        );
     }
 
     #[test]

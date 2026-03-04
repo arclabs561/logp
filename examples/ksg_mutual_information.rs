@@ -24,7 +24,10 @@ fn main() {
     println!("KSG Mutual Information Estimator");
     println!("================================");
     println!("n={} samples, k={} neighbors\n", n, k);
-    println!("{:<8} {:>12} {:>12} {:>8}", "rho", "MI (theory)", "MI (KSG)", "error");
+    println!(
+        "{:<8} {:>12} {:>12} {:>8}",
+        "rho", "MI (theory)", "MI (KSG)", "error"
+    );
     println!("{}", "-".repeat(44));
 
     for &rho in &[0.0, 0.1, 0.3, 0.5, 0.7, 0.9, 0.95, 0.99] {
@@ -52,7 +55,9 @@ fn correlated_gaussian_samples(n: usize, rho: f64, seed: u64) -> (Vec<Vec<f64>>,
     let mut state = seed;
     let mut next_uniform = || -> f64 {
         // LCG (Numerical Recipes)
-        state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        state = state
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
         (state >> 11) as f64 / (1u64 << 53) as f64
     };
 

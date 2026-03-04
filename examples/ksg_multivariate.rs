@@ -36,7 +36,10 @@ fn main() {
     let d = dx; // dx == dy
     let theoretical_mi = -0.5 * d as f64 * (1.0 - rho * rho).ln();
 
-    println!("KSG Mutual Information: Multivariate Gaussian ({dx}D + {dy}D = {}D joint)", dx + dy);
+    println!(
+        "KSG Mutual Information: Multivariate Gaussian ({dx}D + {dy}D = {}D joint)",
+        dx + dy
+    );
     println!("  cross-correlation rho = {rho}");
     println!("  theoretical MI = {theoretical_mi:.4} nats");
     println!("  k = {k} neighbors");
@@ -65,7 +68,10 @@ fn main() {
     println!();
     println!("The estimate converges toward the true value as n increases.");
     println!("A histogram estimator with even 10 bins per dimension would need");
-    println!("10^{} bins for the joint space -- infeasible at these sample sizes.", dx + dy);
+    println!(
+        "10^{} bins for the joint space -- infeasible at these sample sizes.",
+        dx + dy
+    );
 }
 
 /// Generate n samples from a multivariate Gaussian where:
@@ -83,7 +89,9 @@ fn generate_correlated_gaussian(
 ) -> (Vec<Vec<f64>>, Vec<Vec<f64>>) {
     let mut state = seed;
     let mut next_uniform = || -> f64 {
-        state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        state = state
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
         (state >> 11) as f64 / (1u64 << 53) as f64
     };
 

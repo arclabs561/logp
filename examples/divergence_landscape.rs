@@ -7,8 +7,8 @@
 //! Run: cargo run --example divergence_landscape
 
 use logp::{
-    bhattacharyya_distance, hellinger, jensen_shannon_divergence, kl_divergence,
-    renyi_divergence, tsallis_divergence,
+    bhattacharyya_distance, hellinger, jensen_shannon_divergence, kl_divergence, renyi_divergence,
+    tsallis_divergence,
 };
 
 fn main() {
