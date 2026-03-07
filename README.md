@@ -67,7 +67,7 @@ cargo run --example ksg_mutual_information
 
 ```toml
 [dependencies]
-logp = "0.1.0"
+logp = "0.1.1"
 ```
 
 ```rust

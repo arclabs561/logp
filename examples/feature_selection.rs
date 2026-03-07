@@ -97,10 +97,9 @@ fn main() {
 
     for (rank, &(idx, mi)) in mi_estimates.iter().enumerate() {
         println!(
-            "{:>4}  {:>10.4}  {:<18}  {}",
+            "{:>4}  {:>10.4}  feature_{idx:<10}  {}",
             rank + 1,
             mi,
-            format!("feature_{idx}"),
             labels[idx],
         );
     }

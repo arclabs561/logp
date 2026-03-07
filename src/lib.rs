@@ -763,7 +763,7 @@ pub fn digamma(mut x: f64) -> f64 {
 /// // BC is in [0, 1].
 /// let q = [0.5, 0.5];
 /// let bc = bhattacharyya_coeff(&p, &q, 1e-9).unwrap();
-/// assert!(bc >= 0.0 && bc <= 1.0);
+/// assert!((0.0..=1.0).contains(&bc));
 /// ```
 pub fn bhattacharyya_coeff(p: &[f64], q: &[f64], tol: f64) -> Result<f64> {
     ensure_same_len(p, q)?;
@@ -847,7 +847,7 @@ pub fn hellinger_squared(p: &[f64], q: &[f64], tol: f64) -> Result<f64> {
 /// assert!((h_pq - h_qp).abs() < 1e-15);
 ///
 /// // Bounded in [0, 1].
-/// assert!(h_pq >= 0.0 && h_pq <= 1.0);
+/// assert!((0.0..=1.0).contains(&h_pq));
 /// ```
 pub fn hellinger(p: &[f64], q: &[f64], tol: f64) -> Result<f64> {
     Ok(hellinger_squared(p, q, tol)?.sqrt())
@@ -1489,7 +1489,7 @@ mod tests {
         let p = [0.1, 0.9];
         let q = [0.9, 0.1];
         let h2 = hellinger_squared(&p, &q, TOL).unwrap();
-        assert!(h2 >= -1e-12 && h2 <= 1.0 + 1e-12, "h2={h2}");
+        assert!((-1e-12..=1.0 + 1e-12).contains(&h2), "h2={h2}");
     }
 
     #[test]
