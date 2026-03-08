@@ -4,13 +4,14 @@
 [![Documentation](https://docs.rs/logp/badge.svg)](https://docs.rs/logp)
 [![CI](https://github.com/arclabs561/logp/actions/workflows/ci.yml/badge.svg)](https://github.com/arclabs561/logp/actions/workflows/ci.yml)
 
-Information theory primitives: entropies and divergences.
+Information theory primitives in Rust: entropy, KL divergence, mutual information (KSG estimator), and information-monotone divergences.
 
-## Problem
+```toml
+[dependencies]
+logp = "0.1.2"
+```
 
-You have two probability distributions and need to quantify how different they are. KL divergence is asymmetric and unbounded; JS divergence is symmetric and bounded by ln(2). Hellinger distance satisfies the triangle inequality. Each divergence has different properties, and choosing the wrong one gives misleading results.
-
-This library provides all of them with a consistent interface, validated by property-based tests (KL non-negativity, Pinsker's inequality, JS boundedness, sqrt(JS) triangle inequality, and more).
+Discrete distributions: Shannon/Renyi/Tsallis entropy, KL/JS/Hellinger/Bhattacharyya divergence, chi-squared divergence, total variation, f-divergences. Continuous distributions: KSG mutual information estimator (type I and II), differential entropy via k-NN. All validated by property-based tests (KL non-negativity, Pinsker's inequality, JS boundedness, sqrt(JS) triangle inequality).
 
 ## Examples
 
