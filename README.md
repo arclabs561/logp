@@ -55,6 +55,18 @@ Note: JS is symmetric and bounded [0, ln2]; KL is asymmetric and unbounded.
 cargo run --example ksg_mutual_information
 ```
 
+**High-dimensional mutual information**. KSG estimation in 10 dimensions (two correlated 5D blocks). Histogram-based MI is infeasible at this dimensionality (10^10 bins), but KSG converges cleanly. Compares estimates against the closed-form Gaussian MI:
+
+```bash
+cargo run --example ksg_multivariate
+```
+
+**Feature selection**. Rank 8 candidate features (3 linear, 1 quadratic, 4 noise) by their KSG mutual information with a target variable. The nonlinear feature (quadratic) is correctly ranked alongside the linear ones -- something correlation-based methods miss:
+
+```bash
+cargo run --example feature_selection
+```
+
 ## What it provides
 
 **Entropies**: Shannon (nats/bits), cross-entropy, mutual information (discrete + KSG continuous estimator).
