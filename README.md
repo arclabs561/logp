@@ -69,9 +69,9 @@ cargo run --example feature_selection
 
 ## What it provides
 
-**Entropies**: Shannon (nats/bits), cross-entropy, mutual information (discrete + KSG continuous estimator).
+**Entropies**: Shannon (nats/bits), Renyi, Tsallis, cross-entropy, conditional entropy, mutual information (discrete + KSG continuous estimator), normalized MI.
 
-**Divergences**: KL, Jensen-Shannon, Hellinger, Bhattacharyya, Renyi, Tsallis, Amari alpha-family, Csiszar f-divergences, Bregman divergences.
+**Divergences**: KL, Jensen-Shannon (equal and weighted), Hellinger, Bhattacharyya, total variation, chi-squared, Renyi, Tsallis, Amari alpha-family, Csiszar f-divergences, Bregman divergences (SquaredL2 and NegEntropy generators).
 
 **Gaussian KL**: Closed-form KL between diagonal Gaussians.
 
@@ -101,7 +101,7 @@ The `tol` parameter controls how strictly inputs are validated as probability di
 cargo test -p logp
 ```
 
-76 tests (52 unit + 24 doc-tests) covering all public API functions, including property-based tests for KL non-negativity, Pinsker's inequality, JS boundedness, sqrt(JS) triangle inequality, Hellinger triangle inequality, Renyi limit to KL, Amari alpha-KL correspondence, Csiszar f-divergence with KL generator, total Bregman normalization, digamma recurrence/domain, PMI edge cases, and KSG estimator.
+127 tests (93 unit + 34 doc-tests) covering all public API functions, including property-based tests for KL non-negativity, Pinsker's inequality and tightness, JS boundedness, sqrt(JS) and Hellinger and total variation triangle inequality, Renyi divergence and entropy monotonicity in alpha, Amari alpha-KL correspondence, Csiszar f-divergence with KL/Hellinger/chi-squared generators, Bhattacharyya-Renyi consistency, entropy concavity, cross-entropy decomposition, conditional entropy chain rule, chi-squared/KL upper bound, total Bregman normalization, NegEntropy Bregman/KL equivalence, digamma precision at DLMF reference values, PMI edge cases, near-boundary numerical robustness, data processing inequality for discrete MI, f-divergence monotonicity under coarse-graining, streaming log-sum-exp, weighted JS entropy bounds, and KSG estimator accuracy against Gaussian ground truth.
 
 ## License
 

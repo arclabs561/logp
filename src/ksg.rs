@@ -205,4 +205,95 @@ mod tests {
         let err = mutual_information_ksg(&x, &y, 1, KsgVariant::Alg1).unwrap_err();
         assert!(matches!(err, Error::Domain(_)));
     }
+
+    #[test]
+    fn test_ksg_gaussian_ground_truth_alg1() {
+        // Bivariate Gaussian with known correlation rho.
+        // Analytical MI = -0.5 * ln(1 - rho^2).
+        // Use a deterministic LCG to generate samples (no external dep).
+        let rho: f64 = 0.8;
+        let mi_true = -0.5_f64 * (1.0 - rho * rho).ln();
+        let n = 2000;
+
+        let (x, y) = correlated_gaussian_samples(n, rho, 12345);
+
+        let mi_est = mutual_information_ksg(&x, &y, 5, KsgVariant::Alg1).unwrap();
+        assert!(mi_est.is_finite(), "MI estimate is not finite: {mi_est}");
+        // Allow 30% relative error for N=2000, k=5.
+        let rel_err = (mi_est - mi_true).abs() / mi_true;
+        assert!(
+            rel_err < 0.30,
+            "KSG Alg1 Gaussian ground-truth: mi_est={mi_est:.4}, mi_true={mi_true:.4}, rel_err={rel_err:.3}"
+        );
+    }
+
+    #[test]
+    fn test_ksg_gaussian_ground_truth_alg2() {
+        let rho: f64 = 0.8;
+        let mi_true = -0.5_f64 * (1.0 - rho * rho).ln();
+        // Alg2 has higher bias than Alg1; use more samples.
+        let n = 4000;
+
+        let (x, y) = correlated_gaussian_samples(n, rho, 54321);
+
+        let mi_est = mutual_information_ksg(&x, &y, 5, KsgVariant::Alg2).unwrap();
+        assert!(mi_est.is_finite(), "MI estimate is not finite: {mi_est}");
+        let rel_err = (mi_est - mi_true).abs() / mi_true;
+        assert!(
+            rel_err < 0.40,
+            "KSG Alg2 Gaussian ground-truth: mi_est={mi_est:.4}, mi_true={mi_true:.4}, rel_err={rel_err:.3}"
+        );
+    }
+
+    #[test]
+    fn test_ksg_independent_near_zero() {
+        // Independent samples with larger N: MI should be near zero.
+        let n = 500;
+        let mut state: u64 = 99999;
+        let mut next_uniform = || -> f64 {
+            state = state
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
+            (state >> 11) as f64 / (1u64 << 53) as f64
+        };
+        let x: Vec<Vec<f64>> = (0..n).map(|_| vec![next_uniform()]).collect();
+        let y: Vec<Vec<f64>> = (0..n).map(|_| vec![next_uniform()]).collect();
+        let mi = mutual_information_ksg(&x, &y, 5, KsgVariant::Alg1).unwrap();
+        assert!(mi.abs() < 0.15, "Independent MI should be near 0, got {mi}");
+    }
+
+    /// Generate N samples from a bivariate Gaussian with correlation rho.
+    /// Uses Box-Muller transform with a deterministic LCG.
+    fn correlated_gaussian_samples(
+        n: usize,
+        rho: f64,
+        seed: u64,
+    ) -> (Vec<Vec<f64>>, Vec<Vec<f64>>) {
+        let mut state: u64 = seed;
+        let mut next_uniform = || -> f64 {
+            state = state
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
+            // Map to (0, 1) avoiding exact 0.
+            let u = ((state >> 11) as f64 + 0.5) / ((1u64 << 53) as f64);
+            u
+        };
+        let mut next_normal = || -> f64 {
+            let u1 = next_uniform();
+            let u2 = next_uniform();
+            (-2.0 * u1.ln()).sqrt() * (2.0 * std::f64::consts::PI * u2).cos()
+        };
+
+        let mut x = Vec::with_capacity(n);
+        let mut y = Vec::with_capacity(n);
+        for _ in 0..n {
+            let z1 = next_normal();
+            let z2 = next_normal();
+            // x = z1, y = rho*z1 + sqrt(1-rho^2)*z2
+            let yi = rho * z1 + (1.0 - rho * rho).sqrt() * z2;
+            x.push(vec![z1]);
+            y.push(vec![yi]);
+        }
+        (x, y)
+    }
 }
