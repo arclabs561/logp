@@ -89,10 +89,7 @@ fn main() {
     println!("Feature Selection via KSG Mutual Information");
     println!("=============================================");
     println!("n={n} samples, k={k} neighbors, {num_features} features\n");
-    println!(
-        "{:>4}  {:>10}  {:<18}  {}",
-        "rank", "MI (KSG)", "feature", "type"
-    );
+    println!("{:>4}  {:>10}  {:<18}  type", "rank", "MI (KSG)", "feature");
     println!("{}", "-".repeat(52));
 
     for (rank, &(idx, mi)) in mi_estimates.iter().enumerate() {
