@@ -24,3 +24,6 @@ ndarray = { version = "0.16", optional = true }
 
 [dev-dependencies]
 proptest = "1.5"
+wass = "0.1"
+rkhs = "0.1"
+ndarray = "0.16"
