@@ -8,7 +8,7 @@ Information theory primitives in Rust: entropy, KL divergence, mutual informatio
 
 ```toml
 [dependencies]
-logp = "0.1.2"
+logp = "0.1.4"
 ```
 
 Discrete distributions: Shannon/Renyi/Tsallis entropy, KL/JS/Hellinger/Bhattacharyya divergence, chi-squared divergence, total variation, f-divergences. Continuous distributions: KSG mutual information estimator (type I and II), differential entropy via k-NN. All validated by property-based tests (KL non-negativity, Pinsker's inequality, JS boundedness, sqrt(JS) triangle inequality).
@@ -80,7 +80,7 @@ cargo run --example feature_selection
 
 ```toml
 [dependencies]
-logp = "0.1.1"
+logp = "0.1.4"
 ```
 
 ```rust
