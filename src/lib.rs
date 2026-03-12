@@ -4,8 +4,7 @@
 //!
 //! ## Scope
 //!
-//! This crate is **L1 (Logic)** in the mathematical foundation: it should stay small and reusable.
-//! It provides *scalar* information measures that appear across clustering, ranking,
+//! Scalar information measures that appear across clustering, ranking,
 //! evaluation, and geometry:
 //!
 //! - Shannon entropy and cross-entropy
@@ -62,8 +61,7 @@ use thiserror::Error;
 mod ksg;
 pub use ksg::{mutual_information_ksg, KsgVariant};
 
-/// Natural log of 2. Useful when converting nats ↔ bits or bounding Jensen–Shannon.
-pub const LN_2: f64 = core::f64::consts::LN_2;
+use core::f64::consts::LN_2;
 
 /// KL Divergence between two diagonal Multivariate Gaussians.
 ///
@@ -133,7 +131,7 @@ pub enum Error {
     #[error("not normalized (expected sum≈1): sum={sum}")]
     NotNormalized { sum: f64 },
 
-    /// The alpha parameter is outside its valid domain (e.g., alpha=1 for Renyi/Tsallis).
+    /// The alpha parameter is outside its valid domain (e.g., negative or non-finite).
     #[error("invalid alpha: {alpha} (must be finite and not equal to {forbidden})")]
     InvalidAlpha { alpha: f64, forbidden: f64 },
 
@@ -284,7 +282,7 @@ pub fn entropy_nats(p: &[f64], tol: f64) -> Result<f64> {
 /// # Examples
 ///
 /// ```
-/// # use logp::{entropy_bits, entropy_nats, LN_2};
+/// # use logp::{entropy_bits, entropy_nats};
 /// // Fair coin: H = 1 bit.
 /// let p = [0.5, 0.5];
 /// let bits = entropy_bits(&p, 1e-9).unwrap();
@@ -292,7 +290,7 @@ pub fn entropy_nats(p: &[f64], tol: f64) -> Result<f64> {
 ///
 /// // Consistent with nats / ln(2).
 /// let nats = entropy_nats(&p, 1e-9).unwrap();
-/// assert!((bits - nats / LN_2).abs() < 1e-12);
+/// assert!((bits - nats / core::f64::consts::LN_2).abs() < 1e-12);
 /// ```
 pub fn entropy_bits(p: &[f64], tol: f64) -> Result<f64> {
     Ok(entropy_nats(p, tol)? / LN_2)
@@ -308,10 +306,10 @@ pub fn entropy_bits(p: &[f64], tol: f64) -> Result<f64> {
 /// # Examples
 ///
 /// ```
-/// # use logp::{entropy_unchecked, LN_2};
+/// # use logp::entropy_unchecked;
 /// // Fair coin: H = ln(2).
 /// let h = entropy_unchecked(&[0.5, 0.5]);
-/// assert!((h - LN_2).abs() < 1e-12);
+/// assert!((h - core::f64::consts::LN_2).abs() < 1e-12);
 ///
 /// // Agrees with the checked version on valid input.
 /// let p = [0.3, 0.7];
@@ -360,17 +358,14 @@ pub fn entropy_unchecked(p: &[f64]) -> f64 {
 /// ```
 pub fn renyi_entropy(p: &[f64], alpha: f64, tol: f64) -> Result<f64> {
     validate_simplex(p, tol)?;
-    if alpha == 1.0 {
-        return Err(Error::InvalidAlpha {
-            alpha,
-            forbidden: 1.0,
-        });
-    }
     if !alpha.is_finite() || alpha < 0.0 {
         return Err(Error::InvalidAlpha {
             alpha,
             forbidden: f64::NAN,
         });
+    }
+    if (alpha - 1.0).abs() < 1e-12 {
+        return entropy_nats(p, tol);
     }
     let mut s = 0.0;
     for &pi in p {
@@ -412,17 +407,14 @@ pub fn renyi_entropy(p: &[f64], alpha: f64, tol: f64) -> Result<f64> {
 /// ```
 pub fn tsallis_entropy(p: &[f64], alpha: f64, tol: f64) -> Result<f64> {
     validate_simplex(p, tol)?;
-    if alpha == 1.0 {
-        return Err(Error::InvalidAlpha {
-            alpha,
-            forbidden: 1.0,
-        });
-    }
     if !alpha.is_finite() || alpha < 0.0 {
         return Err(Error::InvalidAlpha {
             alpha,
             forbidden: f64::NAN,
         });
+    }
+    if (alpha - 1.0).abs() < 1e-12 {
+        return entropy_nats(p, tol);
     }
     let mut s = 0.0;
     for &pi in p {
@@ -566,7 +558,7 @@ pub fn kl_divergence(p: &[f64], q: &[f64], tol: f64) -> Result<f64> {
 /// # Examples
 ///
 /// ```
-/// # use logp::{jensen_shannon_divergence, LN_2};
+/// # use logp::jensen_shannon_divergence;
 /// // JS(p, p) = 0.
 /// let p = [0.3, 0.7];
 /// assert!(jensen_shannon_divergence(&p, &p, 1e-9).unwrap().abs() < 1e-15);
@@ -575,7 +567,7 @@ pub fn kl_divergence(p: &[f64], q: &[f64], tol: f64) -> Result<f64> {
 /// let a = [1.0, 0.0];
 /// let b = [0.0, 1.0];
 /// let js = jensen_shannon_divergence(&a, &b, 1e-9).unwrap();
-/// assert!((js - LN_2).abs() < 1e-12);
+/// assert!((js - core::f64::consts::LN_2).abs() < 1e-12);
 ///
 /// // Symmetric: JS(p, q) = JS(q, p).
 /// let q = [0.5, 0.5];
@@ -683,7 +675,7 @@ pub fn jensen_shannon_weighted(p: &[f64], q: &[f64], pi1: f64, tol: f64) -> Resu
 /// # Examples
 ///
 /// ```
-/// # use logp::{mutual_information, entropy_nats, LN_2};
+/// # use logp::{mutual_information, entropy_nats};
 /// // Independent joint: p(x,y) = p(x)*p(y), so I(X;Y) = 0.
 /// let p_xy = [0.15, 0.35, 0.15, 0.35]; // 2x2, marginals [0.5,0.5] x [0.3,0.7]
 /// let mi = mutual_information(&p_xy, 2, 2, 1e-9).unwrap();
@@ -692,7 +684,7 @@ pub fn jensen_shannon_weighted(p: &[f64], q: &[f64], pi1: f64, tol: f64) -> Resu
 /// // Perfect correlation (Y = X, uniform bit): I(X;Y) = H(X) = ln(2).
 /// let diag = [0.5, 0.0, 0.0, 0.5];
 /// let mi = mutual_information(&diag, 2, 2, 1e-9).unwrap();
-/// assert!((mi - LN_2).abs() < 1e-12);
+/// assert!((mi - core::f64::consts::LN_2).abs() < 1e-12);
 /// ```
 pub fn mutual_information(p_xy: &[f64], n_x: usize, n_y: usize, tol: f64) -> Result<f64> {
     if n_x == 0 || n_y == 0 {
@@ -869,23 +861,32 @@ pub fn normalized_mutual_information(
 /// ```
 /// # use logp::pmi;
 /// // Independent events: p(x,y) = p(x)*p(y), so PMI = 0.
-/// let val = pmi(0.06, 0.3, 0.2);
+/// let val = pmi(0.06, 0.3, 0.2).unwrap();
 /// assert!(val.abs() < 1e-10);
 ///
 /// // Positive correlation: p(x,y) > p(x)*p(y).
-/// assert!(pmi(0.4, 0.5, 0.5) > 0.0);
+/// assert!(pmi(0.4, 0.5, 0.5).unwrap() > 0.0);
 ///
 /// // Negative correlation: p(x,y) < p(x)*p(y).
-/// assert!(pmi(0.1, 0.5, 0.5) < 0.0);
+/// assert!(pmi(0.1, 0.5, 0.5).unwrap() < 0.0);
 ///
 /// // Zero joint probability returns 0 by convention.
-/// assert_eq!(pmi(0.0, 0.5, 0.5), 0.0);
+/// assert_eq!(pmi(0.0, 0.5, 0.5).unwrap(), 0.0);
+///
+/// // Impossible: p(x,y) > 0 but p(x) = 0.
+/// assert!(pmi(0.1, 0.0, 0.5).is_err());
 /// ```
-pub fn pmi(pxy: f64, px: f64, py: f64) -> f64 {
+pub fn pmi(pxy: f64, px: f64, py: f64) -> Result<f64> {
+    if pxy > 0.0 && px == 0.0 {
+        return Err(Error::Domain("pmi: p(x,y)>0 but p(x)=0 is impossible"));
+    }
+    if pxy > 0.0 && py == 0.0 {
+        return Err(Error::Domain("pmi: p(x,y)>0 but p(y)=0 is impossible"));
+    }
     if pxy <= 0.0 || px <= 0.0 || py <= 0.0 {
-        0.0
+        Ok(0.0)
     } else {
-        (pxy / (px * py)).ln()
+        Ok((pxy / (px * py)).ln())
     }
 }
 
@@ -1101,7 +1102,7 @@ pub fn bhattacharyya_coeff(p: &[f64], q: &[f64], tol: f64) -> Result<f64> {
     let bc: f64 = p
         .iter()
         .zip(q.iter())
-        .map(|(&pi, &qi)| (pi * qi).sqrt())
+        .map(|(&pi, &qi)| pi.sqrt() * qi.sqrt())
         .sum();
     Ok(bc)
 }
@@ -1129,9 +1130,12 @@ pub fn bhattacharyya_distance(p: &[f64], q: &[f64], tol: f64) -> Result<f64> {
     Ok(-bc.ln())
 }
 
-/// Squared Hellinger distance: one minus the Bhattacharyya coefficient.
+/// Squared Hellinger distance.
 ///
-/// \[H^2(p, q) = 1 - \sum_i \sqrt{p_i \, q_i} = 1 - BC(p, q)\]
+/// \[H^2(p, q) = \frac{1}{2}\sum_i \left(\sqrt{p_i} - \sqrt{q_i}\right)^2\]
+///
+/// Equivalent to \(1 - BC(p,q)\) but computed via the sum-of-squared-differences
+/// form to avoid catastrophic cancellation when \(p \approx q\).
 ///
 /// Bounded in \([0, 1]\). Equals the Amari \(\alpha\)-divergence at \(\alpha = 0\)
 /// (up to a factor of 2).
@@ -1150,8 +1154,18 @@ pub fn bhattacharyya_distance(p: &[f64], q: &[f64], tol: f64) -> Result<f64> {
 /// assert!((hellinger_squared(&a, &b, 1e-9).unwrap() - 1.0).abs() < 1e-12);
 /// ```
 pub fn hellinger_squared(p: &[f64], q: &[f64], tol: f64) -> Result<f64> {
-    let bc = bhattacharyya_coeff(p, q, tol)?;
-    Ok((1.0 - bc).max(0.0))
+    ensure_same_len(p, q)?;
+    validate_simplex(p, tol)?;
+    validate_simplex(q, tol)?;
+    let h2: f64 = p
+        .iter()
+        .zip(q.iter())
+        .map(|(&pi, &qi)| {
+            let diff = pi.sqrt() - qi.sqrt();
+            diff * diff
+        })
+        .sum();
+    Ok((0.5 * h2).max(0.0))
 }
 
 /// Hellinger distance: the square root of the squared Hellinger distance.
@@ -1284,15 +1298,14 @@ pub fn rho_alpha(p: &[f64], q: &[f64], alpha: f64, tol: f64) -> Result<f64> {
 /// let q = [0.5, 0.5];
 /// assert!(renyi_divergence(&p, &q, 0.5, 1e-9).unwrap() >= -1e-12);
 ///
-/// // alpha = 1.0 is forbidden (use KL instead).
-/// assert!(renyi_divergence(&p, &q, 1.0, 1e-9).is_err());
+/// // alpha = 1.0 returns KL divergence (Shannon limit).
+/// let kl = logp::kl_divergence(&p, &q, 1e-9).unwrap();
+/// let r1 = renyi_divergence(&p, &q, 1.0, 1e-9).unwrap();
+/// assert!((r1 - kl).abs() < 1e-12);
 /// ```
 pub fn renyi_divergence(p: &[f64], q: &[f64], alpha: f64, tol: f64) -> Result<f64> {
-    if alpha == 1.0 {
-        return Err(Error::InvalidAlpha {
-            alpha,
-            forbidden: 1.0,
-        });
+    if (alpha - 1.0).abs() < 1e-12 {
+        return kl_divergence(p, q, tol);
     }
     let rho = rho_alpha(p, q, alpha, tol)?;
     if rho <= 0.0 {
@@ -1334,15 +1347,14 @@ pub fn renyi_divergence(p: &[f64], q: &[f64], alpha: f64, tol: f64) -> Result<f6
 /// let q = [0.5, 0.5];
 /// assert!(tsallis_divergence(&p, &q, 0.5, 1e-9).unwrap() >= -1e-12);
 ///
-/// // alpha = 1.0 is forbidden.
-/// assert!(tsallis_divergence(&p, &q, 1.0, 1e-9).is_err());
+/// // alpha = 1.0 returns KL divergence (Shannon limit).
+/// let kl = logp::kl_divergence(&p, &q, 1e-9).unwrap();
+/// let t1 = tsallis_divergence(&p, &q, 1.0, 1e-9).unwrap();
+/// assert!((t1 - kl).abs() < 1e-12);
 /// ```
 pub fn tsallis_divergence(p: &[f64], q: &[f64], alpha: f64, tol: f64) -> Result<f64> {
-    if alpha == 1.0 {
-        return Err(Error::InvalidAlpha {
-            alpha,
-            forbidden: 1.0,
-        });
+    if (alpha - 1.0).abs() < 1e-12 {
+        return kl_divergence(p, q, tol);
     }
     Ok((rho_alpha(p, q, alpha, tol)? - 1.0) / (alpha - 1.0))
 }
@@ -1392,7 +1404,7 @@ pub fn amari_alpha_divergence(p: &[f64], q: &[f64], alpha: f64, tol: f64) -> Res
         });
     }
     // Numerically stable handling near ±1.
-    let eps = 1e-10;
+    let eps = tol.sqrt();
     if (alpha + 1.0).abs() <= eps {
         return kl_divergence(p, q, tol);
     }
@@ -1609,27 +1621,18 @@ pub trait BregmanGenerator {
 /// let gen = SquaredL2;
 /// let p = [1.0, 2.0, 3.0];
 /// let q = [1.5, 1.5, 2.5];
-/// let mut grad = [0.0; 3];
-/// let b = bregman_divergence(&gen, &p, &q, &mut grad).unwrap();
+/// let b = bregman_divergence(&gen, &p, &q).unwrap();
 /// let expected = 0.5 * ((0.5_f64).powi(2) + (0.5_f64).powi(2) + (0.5_f64).powi(2));
 /// assert!((b - expected).abs() < 1e-12);
 ///
 /// // B_F(p, p) = 0.
-/// let mut grad2 = [0.0; 3];
-/// assert!(bregman_divergence(&gen, &p, &p, &mut grad2).unwrap().abs() < 1e-15);
+/// assert!(bregman_divergence(&gen, &p, &p).unwrap().abs() < 1e-15);
 /// ```
-pub fn bregman_divergence(
-    gen: &impl BregmanGenerator,
-    p: &[f64],
-    q: &[f64],
-    grad_q: &mut [f64],
-) -> Result<f64> {
+pub fn bregman_divergence(gen: &impl BregmanGenerator, p: &[f64], q: &[f64]) -> Result<f64> {
     ensure_nonempty(p)?;
     ensure_same_len(p, q)?;
-    if grad_q.len() != q.len() {
-        return Err(Error::LengthMismatch(grad_q.len(), q.len()));
-    }
-    gen.grad_into(q, grad_q)?;
+    let mut grad_q = vec![0.0; q.len()];
+    gen.grad_into(q, &mut grad_q)?;
     let fp = gen.f(p)?;
     let fq = gen.f(q)?;
     let mut inner = 0.0;
@@ -1650,22 +1653,25 @@ pub fn bregman_divergence(
 /// let gen = SquaredL2;
 /// let p = [1.0, 2.0];
 /// let q = [3.0, 4.0];
-/// let mut grad = [0.0; 2];
 ///
-/// let tb = total_bregman_divergence(&gen, &p, &q, &mut grad).unwrap();
+/// let tb = total_bregman_divergence(&gen, &p, &q).unwrap();
 ///
 /// // Total Bregman <= Bregman (normalization divides by >= 1).
-/// let mut grad2 = [0.0; 2];
-/// let b = bregman_divergence(&gen, &p, &q, &mut grad2).unwrap();
+/// let b = bregman_divergence(&gen, &p, &q).unwrap();
 /// assert!(tb <= b + 1e-12);
 /// ```
-pub fn total_bregman_divergence(
-    gen: &impl BregmanGenerator,
-    p: &[f64],
-    q: &[f64],
-    grad_q: &mut [f64],
-) -> Result<f64> {
-    let b = bregman_divergence(gen, p, q, grad_q)?;
+pub fn total_bregman_divergence(gen: &impl BregmanGenerator, p: &[f64], q: &[f64]) -> Result<f64> {
+    ensure_nonempty(p)?;
+    ensure_same_len(p, q)?;
+    let mut grad_q = vec![0.0; q.len()];
+    gen.grad_into(q, &mut grad_q)?;
+    let fp = gen.f(p)?;
+    let fq = gen.f(q)?;
+    let mut inner = 0.0;
+    for i in 0..p.len() {
+        inner += (p[i] - q[i]) * grad_q[i];
+    }
+    let b = fp - fq - inner;
     let grad_norm_sq: f64 = grad_q.iter().map(|&x| x * x).sum();
     Ok(b / (1.0 + grad_norm_sq).sqrt())
 }
@@ -1809,7 +1815,7 @@ mod tests {
         let p = [0.5, 0.5];
         let h = entropy_unchecked(&p);
         // -0.5*ln(0.5) - 0.5*ln(0.5) = -ln(0.5) = ln(2)
-        assert!((h - LN_2).abs() < 1e-12);
+        assert!((h - core::f64::consts::LN_2).abs() < 1e-12);
     }
 
     #[test]
@@ -1817,7 +1823,7 @@ mod tests {
         let p = [1.0, 0.0];
         let q = [0.0, 1.0];
         let js = jensen_shannon_divergence(&p, &q, TOL).unwrap();
-        assert!(js <= LN_2 + 1e-12);
+        assert!(js <= core::f64::consts::LN_2 + 1e-12);
         assert!(js >= 0.0);
     }
 
@@ -1844,7 +1850,7 @@ mod tests {
         // X=Y uniform bit ⇒ I(X;Y)=ln 2 (nats)
         let p_xy = [0.5, 0.0, 0.0, 0.5]; // 2x2 diagonal
         let mi = mutual_information(&p_xy, 2, 2, TOL).unwrap();
-        assert!((mi - LN_2).abs() < 1e-12, "mi={}", mi);
+        assert!((mi - core::f64::consts::LN_2).abs() < 1e-12, "mi={}", mi);
     }
 
     #[test]
@@ -1852,8 +1858,7 @@ mod tests {
         let gen = SquaredL2;
         let p = [1.0, 2.0, 3.0];
         let q = [1.5, 1.5, 2.5];
-        let mut grad = [0.0; 3];
-        let b = bregman_divergence(&gen, &p, &q, &mut grad).unwrap();
+        let b = bregman_divergence(&gen, &p, &q).unwrap();
         let expected = 0.5
             * p.iter()
                 .zip(q.iter())
@@ -1889,7 +1894,7 @@ mod tests {
         let p = [0.25, 0.75];
         let nats = entropy_nats(&p, TOL).unwrap();
         let bits = entropy_bits(&p, TOL).unwrap();
-        assert!((bits - nats / LN_2).abs() < 1e-12);
+        assert!((bits - nats / core::f64::consts::LN_2).abs() < 1e-12);
     }
 
     // --- Cross-entropy tests ---
@@ -2033,7 +2038,7 @@ mod tests {
     #[test]
     fn pmi_independent_is_zero() {
         // PMI(x,y) = log(p(x,y) / (p(x)*p(y))). If independent: p(x,y) = p(x)*p(y)
-        let pmi_val = pmi(0.06, 0.3, 0.2); // 0.3 * 0.2 = 0.06
+        let pmi_val = pmi(0.06, 0.3, 0.2).unwrap(); // 0.3 * 0.2 = 0.06
         assert!(
             pmi_val.abs() < 1e-10,
             "PMI of independent events should be 0: {pmi_val}"
@@ -2043,7 +2048,7 @@ mod tests {
     #[test]
     fn pmi_positive_for_correlated() {
         // If p(x,y) > p(x)*p(y), events are positively correlated
-        let pmi_val = pmi(0.4, 0.5, 0.5); // 0.4 > 0.5*0.5 = 0.25
+        let pmi_val = pmi(0.4, 0.5, 0.5).unwrap(); // 0.4 > 0.5*0.5 = 0.25
         assert!(
             pmi_val > 0.0,
             "correlated events should have positive PMI: {pmi_val}"
@@ -2123,7 +2128,7 @@ mod tests {
         fn js_is_bounded(p in simplex_vec(16), q in simplex_vec(16)) {
             let js = jensen_shannon_divergence(&p, &q, 1e-6).unwrap();
             prop_assert!(js >= -1e-12);
-            prop_assert!(js <= LN_2 + 1e-9);
+            prop_assert!(js <= core::f64::consts::LN_2 + 1e-9);
         }
 
         #[test]
@@ -2257,10 +2262,8 @@ mod tests {
         let gen = SquaredL2;
         let p = [1.0, 2.0, 3.0];
         let q = [4.0, 5.0, 6.0];
-        let mut grad1 = [0.0; 3];
-        let mut grad2 = [0.0; 3];
-        let b = bregman_divergence(&gen, &p, &q, &mut grad1).unwrap();
-        let tb = total_bregman_divergence(&gen, &p, &q, &mut grad2).unwrap();
+        let b = bregman_divergence(&gen, &p, &q).unwrap();
+        let tb = total_bregman_divergence(&gen, &p, &q).unwrap();
         assert!(tb <= b + 1e-12, "total_bregman={tb} > bregman={b}");
         assert!(tb >= 0.0);
     }
@@ -2269,8 +2272,7 @@ mod tests {
     fn total_bregman_is_zero_for_identical() {
         let gen = SquaredL2;
         let p = [1.0, 2.0];
-        let mut grad = [0.0; 2];
-        let tb = total_bregman_divergence(&gen, &p, &p, &mut grad).unwrap();
+        let tb = total_bregman_divergence(&gen, &p, &p).unwrap();
         assert!(tb.abs() < 1e-15);
     }
 
@@ -2298,19 +2300,19 @@ mod tests {
 
     #[test]
     fn pmi_zero_joint_returns_zero() {
-        assert_eq!(pmi(0.0, 0.5, 0.5), 0.0);
+        assert_eq!(pmi(0.0, 0.5, 0.5).unwrap(), 0.0);
     }
 
     #[test]
-    fn pmi_zero_marginal_returns_zero() {
-        // When px or py is zero, return 0 by convention.
-        assert_eq!(pmi(0.1, 0.0, 0.5), 0.0);
-        assert_eq!(pmi(0.1, 0.5, 0.0), 0.0);
+    fn pmi_zero_marginal_with_zero_joint_returns_zero() {
+        // When px or py is zero AND pxy is also zero, return 0 by convention.
+        assert_eq!(pmi(0.0, 0.0, 0.5).unwrap(), 0.0);
+        assert_eq!(pmi(0.0, 0.5, 0.0).unwrap(), 0.0);
     }
 
     #[test]
     fn pmi_all_zero_returns_zero() {
-        assert_eq!(pmi(0.0, 0.0, 0.0), 0.0);
+        assert_eq!(pmi(0.0, 0.0, 0.0).unwrap(), 0.0);
     }
 
     // --- Enrich-motivated tests ---
@@ -2319,7 +2321,7 @@ mod tests {
     fn digamma_at_dlmf_reference_values() {
         // psi(0.5) = -gamma - 2*ln(2)
         let gamma = 0.57721566490153286;
-        let expected_half = -gamma - 2.0 * LN_2;
+        let expected_half = -gamma - 2.0 * core::f64::consts::LN_2;
         let psi_half = digamma(0.5);
         assert!(
             (psi_half - expected_half).abs() < 1e-12,
@@ -2733,8 +2735,7 @@ mod tests {
         let q = [0.4, 0.4, 0.2];
         let kl = kl_divergence(&p, &q, TOL).unwrap();
         let gen = NegEntropy;
-        let mut grad = [0.0; 3];
-        let breg = bregman_divergence(&gen, &p, &q, &mut grad).unwrap();
+        let breg = bregman_divergence(&gen, &p, &q).unwrap();
         assert!(
             (breg - kl).abs() < 1e-10,
             "Bregman(NegEntropy)={breg}, KL={kl}"
@@ -2745,8 +2746,7 @@ mod tests {
     fn neg_entropy_bregman_self_is_zero() {
         let p = [0.3, 0.7];
         let gen = NegEntropy;
-        let mut grad = [0.0; 2];
-        let breg = bregman_divergence(&gen, &p, &p, &mut grad).unwrap();
+        let breg = bregman_divergence(&gen, &p, &p).unwrap();
         assert!(breg.abs() < 1e-14, "Bregman(p,p)={breg}");
     }
 
@@ -2841,5 +2841,101 @@ mod tests {
         let s_0999 = tsallis_entropy(&p, 0.999, TOL).unwrap();
         assert!((s_099 - h_shannon).abs() < 0.01);
         assert!((s_0999 - h_shannon).abs() < 0.001);
+    }
+
+    // --- New tests for 0.2.0 ---
+
+    #[test]
+    fn bhattacharyya_precision_near_identical() {
+        let p = [0.5 + 1e-15, 0.5 - 1e-15];
+        let q = [0.5, 0.5];
+        let bc = bhattacharyya_coeff(&p, &q, 1e-6).unwrap();
+        assert!(
+            (bc - 1.0).abs() < 1e-14,
+            "BC should be very close to 1.0: {bc}"
+        );
+        let h2 = hellinger_squared(&p, &q, 1e-6).unwrap();
+        // h2 should be tiny but not exactly zero (numerics permitting).
+        assert!(h2 < 1e-14, "h2 should be tiny: {h2}");
+        assert!(h2.is_finite(), "h2 should be finite");
+    }
+
+    #[test]
+    fn renyi_alpha_sweep_continuity() {
+        let p = [0.2, 0.3, 0.5];
+        let tol = 1e-9;
+        let mut prev_renyi = renyi_entropy(&p, 0.5, tol).unwrap();
+        let mut prev_tsallis = tsallis_entropy(&p, 0.5, tol).unwrap();
+        let mut alpha = 0.6;
+        while alpha <= 2.0 + 1e-9 {
+            let r = renyi_entropy(&p, alpha, tol).unwrap();
+            let t = tsallis_entropy(&p, alpha, tol).unwrap();
+            let jump_r = (r - prev_renyi).abs();
+            let jump_t = (t - prev_tsallis).abs();
+            assert!(
+                jump_r < 0.5,
+                "Renyi discontinuity at alpha={alpha}: jump={jump_r}"
+            );
+            assert!(
+                jump_t < 0.5,
+                "Tsallis discontinuity at alpha={alpha}: jump={jump_t}"
+            );
+            prev_renyi = r;
+            prev_tsallis = t;
+            alpha += 0.1;
+        }
+    }
+
+    #[test]
+    fn ksg_ties_finite() {
+        // Integer-valued data with exact ties.
+        let x: Vec<Vec<f64>> = (0..50).map(|i| vec![(i % 5) as f64]).collect();
+        let y: Vec<Vec<f64>> = (0..50).map(|i| vec![(i % 3) as f64]).collect();
+        let mi1 = mutual_information_ksg(&x, &y, 3, KsgVariant::Alg1).unwrap();
+        let mi2 = mutual_information_ksg(&x, &y, 3, KsgVariant::Alg2).unwrap();
+        assert!(
+            mi1.is_finite(),
+            "KSG Alg1 with ties returned NaN/Inf: {mi1}"
+        );
+        assert!(
+            mi2.is_finite(),
+            "KSG Alg2 with ties returned NaN/Inf: {mi2}"
+        );
+    }
+
+    proptest! {
+        #![proptest_config(ProptestConfig { cases: 64, .. ProptestConfig::default() })]
+
+        #[test]
+        fn bregman_nonnegative(
+            p in simplex_vec_pos(8, 1e-6),
+            q in simplex_vec_pos(8, 1e-6),
+        ) {
+            let gen = NegEntropy;
+            let b = bregman_divergence(&gen, &p, &q).unwrap();
+            prop_assert!(b >= -1e-12, "Bregman(NegEntropy) negative: {b}");
+        }
+
+        #[test]
+        fn renyi_divergence_alpha1_equals_kl(
+            p in simplex_vec_pos(8, 1e-6),
+            q in simplex_vec_pos(8, 1e-6),
+        ) {
+            let tol = 1e-6;
+            let kl = kl_divergence(&p, &q, tol).unwrap();
+            let r1 = renyi_divergence(&p, &q, 1.0, tol).unwrap();
+            prop_assert!(
+                (r1 - kl).abs() < 1e-9,
+                "renyi(alpha=1)={r1} != kl={kl}"
+            );
+        }
+    }
+
+    #[test]
+    fn pmi_impossible_input_errors() {
+        // p(x,y)>0 but p(x)=0 is impossible.
+        assert!(pmi(0.1, 0.0, 0.5).is_err());
+        // p(x,y)>0 but p(y)=0 is impossible.
+        assert!(pmi(0.1, 0.5, 0.0).is_err());
     }
 }
