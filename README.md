@@ -8,10 +8,10 @@ Information theory primitives in Rust: entropy, KL divergence, mutual informatio
 
 ```toml
 [dependencies]
-logp = "0.1.4"
+logp = "0.2.0"
 ```
 
-Discrete distributions: Shannon/Renyi/Tsallis entropy, KL/JS/Hellinger/Bhattacharyya divergence, chi-squared divergence, total variation, f-divergences. Continuous distributions: KSG mutual information estimator (type I and II), differential entropy via k-NN. All validated by property-based tests (KL non-negativity, Pinsker's inequality, JS boundedness, sqrt(JS) triangle inequality).
+Discrete distributions: Shannon/Renyi/Tsallis entropy, KL/JS/Hellinger/Bhattacharyya divergence, chi-squared divergence, total variation, f-divergences. Continuous distributions: KSG mutual information estimator (type I and II). All validated by property-based tests (KL non-negativity, Pinsker's inequality, JS boundedness, sqrt(JS) triangle inequality).
 
 ## Examples
 
@@ -80,7 +80,7 @@ cargo run --example feature_selection
 
 ```toml
 [dependencies]
-logp = "0.1.4"
+logp = "0.2.0"
 ```
 
 ```rust
@@ -102,7 +102,7 @@ The `tol` parameter controls how strictly inputs are validated as probability di
 cargo test -p logp
 ```
 
-127 tests (93 unit + 34 doc-tests) covering all public API functions, including property-based tests for KL non-negativity, Pinsker's inequality and tightness, JS boundedness, sqrt(JS) and Hellinger and total variation triangle inequality, Renyi divergence and entropy monotonicity in alpha, Amari alpha-KL correspondence, Csiszar f-divergence with KL/Hellinger/chi-squared generators, Bhattacharyya-Renyi consistency, entropy concavity, cross-entropy decomposition, conditional entropy chain rule, chi-squared/KL upper bound, total Bregman normalization, NegEntropy Bregman/KL equivalence, digamma precision at DLMF reference values, PMI edge cases, near-boundary numerical robustness, data processing inequality for discrete MI, f-divergence monotonicity under coarse-graining, streaming log-sum-exp, weighted JS entropy bounds, and KSG estimator accuracy against Gaussian ground truth.
+133 tests (99 unit + 34 doc-tests) covering all public API functions, including property-based tests for KL non-negativity, Pinsker's inequality and tightness, JS boundedness, sqrt(JS) and Hellinger and total variation triangle inequality, Renyi divergence and entropy monotonicity in alpha, Renyi/Tsallis alpha=1 Shannon limit, Amari alpha-KL correspondence, Csiszar f-divergence with KL/Hellinger/chi-squared generators, Bhattacharyya-Renyi consistency, Bhattacharyya precision for near-identical distributions, Bregman non-negativity, entropy concavity, cross-entropy decomposition, conditional entropy chain rule, chi-squared/KL upper bound, total Bregman normalization, NegEntropy Bregman/KL equivalence, digamma precision at DLMF reference values, PMI edge cases and impossible-input errors, near-boundary numerical robustness, data processing inequality for discrete MI, f-divergence monotonicity under coarse-graining, streaming log-sum-exp, weighted JS entropy bounds, KSG estimator accuracy against Gaussian ground truth, and KSG ties handling.
 
 ## License
 
