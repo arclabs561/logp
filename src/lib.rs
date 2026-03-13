@@ -121,19 +121,37 @@ pub enum Error {
 
     /// An entry is NaN or infinite where a finite value is required.
     #[error("non-finite entry at index {idx}: {value}")]
-    NonFinite { idx: usize, value: f64 },
+    NonFinite {
+        /// Position of the offending entry.
+        idx: usize,
+        /// The non-finite value found.
+        value: f64,
+    },
 
     /// An entry is negative where a nonnegative value is required (probability distributions).
     #[error("negative entry at index {idx}: {value}")]
-    Negative { idx: usize, value: f64 },
+    Negative {
+        /// Position of the offending entry.
+        idx: usize,
+        /// The negative value found.
+        value: f64,
+    },
 
     /// The distribution does not sum to 1 within the specified tolerance.
     #[error("not normalized (expected sum≈1): sum={sum}")]
-    NotNormalized { sum: f64 },
+    NotNormalized {
+        /// Actual sum of the distribution.
+        sum: f64,
+    },
 
     /// The alpha parameter is outside its valid domain (e.g., negative or non-finite).
     #[error("invalid alpha: {alpha} (must be finite and not equal to {forbidden})")]
-    InvalidAlpha { alpha: f64, forbidden: f64 },
+    InvalidAlpha {
+        /// The invalid alpha value provided.
+        alpha: f64,
+        /// The value alpha must not equal (e.g., 0.0).
+        forbidden: f64,
+    },
 
     /// Catch-all for domain violations: zero standard deviation, q_i=0 while p_i>0,
     /// insufficient sample size for KSG, and similar precondition failures.
@@ -141,6 +159,7 @@ pub enum Error {
     Domain(&'static str),
 }
 
+/// Convenience alias for `Result<T, logp::Error>`.
 pub type Result<T> = core::result::Result<T, Error>;
 
 fn ensure_nonempty(x: &[f64]) -> Result<()> {
