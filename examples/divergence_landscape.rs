@@ -4,6 +4,9 @@
 //! Prints a table of KL, JS, Hellinger, Bhattacharyya, Renyi(0.5), and Tsallis(2)
 //! so you can see how each divergence responds to the same distributional shift.
 //!
+//! Also includes a Renyi alpha sweep showing continuity at alpha = 1, where
+//! renyi_divergence falls back to KL divergence (a 0.2.0 feature).
+//!
 //! Run: cargo run --example divergence_landscape
 
 use logp::{
@@ -44,4 +47,28 @@ fn main() {
     println!("  - KL diverges as p -> delta; JS stays bounded by ln(2) ~ 0.693");
     println!("  - Hellinger saturates at 1.0; Bhattacharyya diverges");
     println!("  - Renyi(alpha<1) is gentler than KL; Tsallis(alpha>1) is sharper near extremes");
+
+    // --- Renyi alpha sweep: continuity at alpha = 1 (0.2.0 feature) ----------
+    //
+    // In 0.2.0, renyi_divergence handles alpha = 1 by falling back to KL,
+    // so the function is continuous across the full alpha range.
+    println!();
+    println!("Renyi divergence alpha sweep (p = [0.7, 0.3], q = [0.5, 0.5]):");
+    println!("{:<8} {:>12}", "alpha", "Renyi_alpha");
+    println!("{}", "-".repeat(22));
+
+    let p_sweep = [0.7, 0.3];
+    let q_sweep = [0.5, 0.5];
+    let alphas = [
+        0.1, 0.25, 0.5, 0.75, 0.9, 0.99, 1.0, 1.01, 1.1, 1.5, 2.0, 5.0,
+    ];
+
+    for &a in &alphas {
+        let r = renyi_divergence(&p_sweep, &q_sweep, a, tol).unwrap();
+        println!("{:<8.2} {:>12.6}", a, r);
+    }
+
+    println!();
+    println!("The column is continuous through alpha = 1.0 (where Renyi = KL).");
+    println!("Tsallis divergence has the same alpha = 1 continuity.");
 }
