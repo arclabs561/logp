@@ -670,7 +670,7 @@ pub fn jensen_shannon_weighted(p: &[f64], q: &[f64], pi1: f64, tol: f64) -> Resu
 /// with shape `(n_x, n_y)`.
 ///
 /// Public invariant (this is the important one): this API is **backend-agnostic**.
-/// It does not force `ndarray` into the public surface of an L1 crate.
+/// It does not force `ndarray` into the public surface of a leaf crate.
 ///
 /// # Examples
 ///

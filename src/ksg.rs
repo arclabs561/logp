@@ -1,6 +1,6 @@
 //! Kraskov-Stogbauer-Grassberger (KSG) Mutual Information Estimator.
 //!
-//! Gold standard for non-parametric MI estimation from continuous samples.
+//! Non-parametric MI estimation from continuous samples using k-nearest neighbors.
 //!
 //! # References
 //!
