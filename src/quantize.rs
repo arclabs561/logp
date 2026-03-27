@@ -1,3 +1,6 @@
+//! **Deprecated**: This module has moved to [`qntz::distquant`](https://docs.rs/qntz/latest/qntz/distquant/).
+//! It remains here for backward compatibility and will be removed in a future version.
+//!
 //! Distributional quantization via the Lloyd-Max algorithm.
 //!
 //! Given a continuous distribution family (Gaussian, logistic, Cauchy) and a
