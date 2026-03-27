@@ -61,6 +61,8 @@ use thiserror::Error;
 mod ksg;
 pub use ksg::{mutual_information_ksg, KsgVariant};
 
+pub mod quantize;
+
 use core::f64::consts::LN_2;
 
 /// KL Divergence between two diagonal Multivariate Gaussians.
