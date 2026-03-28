@@ -50,31 +50,7 @@ doc_a-doc_c    0.6931  21.4651  21.0799
 Note: JS is symmetric and bounded [0, ln2]; KL is asymmetric and unbounded.
 ```
 
-**KSG mutual information estimator**. Estimate mutual information of correlated Gaussians using the Kraskov-Stogbauer-Grassberger method, then compare against the analytical value:
-
-```bash
-cargo run --example ksg_mutual_information
-```
-
-**High-dimensional mutual information**. KSG estimation in 10 dimensions (two correlated 5D blocks). Histogram-based MI is infeasible at this dimensionality (10^10 bins), but KSG converges cleanly. Compares estimates against the closed-form Gaussian MI:
-
-```bash
-cargo run --example ksg_multivariate
-```
-
-**Feature selection**. Rank 8 candidate features (3 linear, 1 quadratic, 4 noise) by their KSG mutual information with a target variable. The nonlinear feature (quadratic) is correctly ranked alongside the linear ones -- something correlation-based methods miss:
-
-```bash
-cargo run --example feature_selection
-```
-
-## What it provides
-
-**Entropies**: Shannon (nats/bits), Renyi, Tsallis, cross-entropy, conditional entropy, mutual information (discrete + KSG continuous estimator), normalized MI.
-
-**Divergences**: KL, Jensen-Shannon (equal and weighted), Hellinger, Bhattacharyya, total variation, chi-squared, Renyi, Tsallis, Amari alpha-family, Csiszar f-divergences, Bregman divergences (SquaredL2 and NegEntropy generators).
-
-**Gaussian KL**: Closed-form KL between diagonal Gaussians.
+See `examples/` for more: `ksg_mutual_information`, `ksg_multivariate`, `feature_selection`.
 
 ## Usage
 
