@@ -4,7 +4,7 @@
 [![Documentation](https://docs.rs/logp/badge.svg)](https://docs.rs/logp)
 [![CI](https://github.com/arclabs561/logp/actions/workflows/ci.yml/badge.svg)](https://github.com/arclabs561/logp/actions/workflows/ci.yml)
 
-Information theory primitives in Rust: entropy, KL divergence, mutual information (KSG estimator), and information-monotone divergences.
+Information theory primitives.
 
 ```toml
 [dependencies]
