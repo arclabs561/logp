@@ -58,6 +58,7 @@
 
 use thiserror::Error;
 
+pub mod distprop;
 mod ksg;
 pub use ksg::{mutual_information_ksg, KsgVariant};
 
