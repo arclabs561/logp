@@ -104,8 +104,9 @@ pub fn propagate_unscented(input: &Gaussian, f: impl Fn(f64) -> f64, kappa: f64)
     let output_mean = w0_mean * y0 + wi * y1 + wi * y2;
 
     // Output variance.
-    let output_var =
-        w0_cov * (y0 - output_mean).powi(2) + wi * (y1 - output_mean).powi(2) + wi * (y2 - output_mean).powi(2);
+    let output_var = w0_cov * (y0 - output_mean).powi(2)
+        + wi * (y1 - output_mean).powi(2)
+        + wi * (y2 - output_mean).powi(2);
 
     Gaussian {
         mean: output_mean,
@@ -258,7 +259,11 @@ mod tests {
         // Linearized mean = 0^2 = 0 (wrong for zero-mean case)
         assert!((lin.mean - 0.0).abs() < 1e-12);
         // Unscented mean should be close to 0^2 + 1^2 = 1.0
-        assert!((uns.mean - 1.0).abs() < 0.1, "unscented mean = {}", uns.mean);
+        assert!(
+            (uns.mean - 1.0).abs() < 0.1,
+            "unscented mean = {}",
+            uns.mean
+        );
     }
 
     #[test]
