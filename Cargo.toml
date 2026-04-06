@@ -13,6 +13,8 @@ rust-version = "1.75"
 keywords = ["information-theory", "entropy", "divergence", "mutual-information", "ksg-estimator"]
 categories = ["algorithms", "science", "mathematics"]
 
+[workspace]
+
 [features]
 default = []
 # Optional ndarray adapter for users who keep joint distributions as matrices.
