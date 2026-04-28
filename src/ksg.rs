@@ -275,8 +275,7 @@ mod tests {
                 .wrapping_mul(6364136223846793005)
                 .wrapping_add(1442695040888963407);
             // Map to (0, 1) avoiding exact 0.
-            let u = ((state >> 11) as f64 + 0.5) / ((1u64 << 53) as f64);
-            u
+            ((state >> 11) as f64 + 0.5) / ((1u64 << 53) as f64)
         };
         let mut next_normal = || -> f64 {
             let u1 = next_uniform();

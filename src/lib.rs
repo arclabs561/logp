@@ -2035,9 +2035,9 @@ mod tests {
     #[test]
     fn digamma_at_one_is_neg_euler_mascheroni() {
         let psi1 = digamma(1.0);
-        // digamma(1) = -gamma where gamma ~= 0.57721566490153286
+        // digamma(1) = -gamma where gamma ~= 0.5772156649015329
         assert!(
-            (psi1 - (-0.57721566490153286)).abs() < 1e-12,
+            (psi1 - (-0.5772156649015329)).abs() < 1e-12,
             "psi(1)={psi1}"
         );
     }
@@ -2340,7 +2340,7 @@ mod tests {
     #[test]
     fn digamma_at_dlmf_reference_values() {
         // psi(0.5) = -gamma - 2*ln(2)
-        let gamma = 0.57721566490153286;
+        let gamma = 0.5772156649015329;
         let expected_half = -gamma - 2.0 * core::f64::consts::LN_2;
         let psi_half = digamma(0.5);
         assert!(
