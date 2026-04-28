@@ -8,7 +8,7 @@ Information theory primitives.
 
 ```toml
 [dependencies]
-logp = "0.2.0"
+logp = "0.2"
 ```
 
 Discrete distributions: Shannon/Renyi/Tsallis entropy, KL/JS/Hellinger/Bhattacharyya divergence, chi-squared divergence, total variation, f-divergences. Continuous distributions: KSG mutual information estimator (type I and II). All validated by property-based tests (KL non-negativity, Pinsker's inequality, JS boundedness, sqrt(JS) triangle inequality).
@@ -56,7 +56,7 @@ See `examples/` for more: `ksg_mutual_information`, `ksg_multivariate`, `feature
 
 ```toml
 [dependencies]
-logp = "0.2.0"
+logp = "0.2"
 ```
 
 ```rust
