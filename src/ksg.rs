@@ -28,13 +28,33 @@ pub enum KsgVariant {
     Alg2,
 }
 
-/// Estimate Mutual Information \(I(X;Y)\) using the KSG estimator.
+/// Estimate Mutual Information \(I(X;Y)\) in nats using the KSG estimator.
 ///
 /// # Arguments
 /// * `x` - Samples from X (N x Dx)
 /// * `y` - Samples from Y (N x Dy)
 /// * `k` - Number of neighbors (typically 3-5)
 /// * `variant` - KSG Algorithm 1 or 2
+///
+/// # Estimator caveats
+///
+/// - **The estimate can be negative.** True mutual information satisfies
+///   \(I \ge 0\), but KSG is a finite-sample estimator and is not constrained
+///   to that bound; small negative values are normal for independent or weakly
+///   dependent data. Clamp with `mi.max(0.0)` if a nonnegative value is
+///   required downstream.
+/// - **Cost is O(N² · (Dx + Dy))**: all pairwise distances are computed for
+///   every point (no spatial index).
+/// - **Samples are not checked for finiteness.** `NaN` or infinite coordinates
+///   are not rejected and yield unspecified results (a `NaN` coordinate
+///   difference is silently dropped by the max-norm fold, so the result can be
+///   finite but wrong rather than `NaN`).
+///
+/// # Errors
+///
+/// - [`Error::LengthMismatch`] if `x` and `y` have different sample counts.
+/// - [`Error::Domain`] if `n <= k`, `k == 0`, any sample has an empty feature
+///   vector, or the feature dimensionality is inconsistent within `x` or `y`.
 ///
 /// # Examples
 ///
