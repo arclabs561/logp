@@ -1,6 +1,6 @@
 [package]
 name = "logp"
-version = "0.2.2"
+version = "0.2.3"
 edition = "2021"
 authors = ["Arc <attobop@gmail.com>"]
 description = "Information theory primitives: entropy, KL divergence, mutual information (KSG estimator), and information-monotone divergences"

@@ -20,6 +20,11 @@
 use crate::{Error, Result};
 
 /// Gaussian distribution parameterized by mean and standard deviation.
+///
+/// The fields are public, so literal construction (`Gaussian { mean, std }`)
+/// bypasses the validation in [`Gaussian::new`]. The `propagate_*` functions
+/// do not re-validate: a hand-built `Gaussian` with negative or non-finite
+/// fields propagates through unchecked.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Gaussian {
     /// Mean of the distribution.
@@ -60,6 +65,8 @@ pub struct DifferentiableFunc {
 /// Y ~ N(f(mu), f'(mu)^2 * sigma^2).
 ///
 /// Accurate when f is nearly linear over the range [mu - 2*sigma, mu + 2*sigma].
+/// The output `std` is `|f'(mu)| * std`, so it is non-negative whenever the
+/// input is valid. Inputs are not validated (see [`Gaussian`]).
 pub fn propagate_linearized(input: &Gaussian, func: &DifferentiableFunc) -> Gaussian {
     let output_mean = (func.f)(input.mean);
     let jacobian = (func.df)(input.mean);
@@ -78,6 +85,16 @@ pub fn propagate_linearized(input: &Gaussian, func: &DifferentiableFunc) -> Gaus
 ///
 /// `kappa` controls spread: 0.0 is standard, negative values pull sigma
 /// points closer to the mean. For Gaussian inputs, kappa = 0.0 is typical.
+///
+/// # Domain
+///
+/// `kappa` must be greater than -1 (here n = 1, so `n + kappa > 0` is
+/// required). `kappa <= -1` is not rejected: it produces a NaN sigma-point
+/// spread (square root of a non-positive value) or a division by zero in the
+/// weights, and the returned `Gaussian` carries NaN fields. For `kappa` in
+/// (-1, 0) the center weight is negative, so the moment-matched variance can
+/// come out negative for strongly nonlinear `f`; the returned `std` is then
+/// NaN.
 pub fn propagate_unscented(input: &Gaussian, f: impl Fn(f64) -> f64, kappa: f64) -> Gaussian {
     let n = 1.0; // dimension
     let lambda = kappa; // for n=1, lambda = n + kappa - n = kappa

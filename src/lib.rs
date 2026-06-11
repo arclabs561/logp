@@ -23,6 +23,25 @@
 //! but it is typically **not** symmetric and **not** a metric (no triangle inequality).
 //! Many failures in downstream code are caused by treating a divergence as a distance metric.
 //!
+//! ## Conventions (units, validation, errors)
+//!
+//! - **Units**: all entropies and divergences are in **nats** (natural log).
+//!   Functions with a `_bits` suffix ([`entropy_bits`]) divide by \(\ln 2\).
+//! - **`tol`**: the trailing `tol` parameter is the absolute tolerance on
+//!   \(|\sum_i p_i - 1|\) used by [`validate_simplex`]. Validation also rejects
+//!   empty slices, negative entries, and non-finite (NaN/infinite) entries.
+//! - **Zero-handling**: terms with \(p_i = 0\) contribute zero
+//!   (\(0 \ln 0 = 0\) by continuity). KL-type divergences return
+//!   [`Error::Domain`] when \(q_i = 0\) while \(p_i > 0\) (the divergence is
+//!   infinite) rather than returning \(\infty\).
+//! - **No panics**: validated functions report bad input via [`enum@Error`], never
+//!   by panicking. The unchecked numeric helpers ([`entropy_unchecked`], the
+//!   [`log_sum_exp`] family, [`digamma`]) also never panic, but out-of-domain
+//!   input yields `NaN` or meaningless values as documented per function.
+//!   (User-supplied closures, e.g. the generator passed to
+//!   [`csiszar_f_divergence`] or a [`BregmanGenerator`] impl, can of course
+//!   panic on their own.)
+//!
 //! ## Key invariants (what tests should enforce)
 //!
 //! - **Jensen–Shannon** is bounded on the simplex:
@@ -72,6 +91,14 @@ use core::f64::consts::LN_2;
 /// matrix inverses; this function does not handle that case.
 ///
 /// Returns 0.5 * Σ [ (std1/std2)^2 + (mu2-mu1)^2 / std2^2 - 1 + 2*ln(std2/std1) ]
+///
+/// Result is in nats. Empty inputs (zero dimensions) return `Ok(0.0)`.
+///
+/// # Errors
+///
+/// [`Error::LengthMismatch`] if the four slices differ in length;
+/// [`Error::Domain`] if any standard deviation is `<= 0`. Non-finite means or
+/// standard deviations are **not** rejected: `NaN` propagates into the result.
 ///
 /// # Examples
 ///
@@ -323,6 +350,13 @@ pub fn entropy_bits(p: &[f64], tol: f64) -> Result<f64> {
 /// # Invariant
 /// Assumes `p` is non-negative and normalized.
 ///
+/// If the invariant is violated, no error is raised and the result is
+/// meaningless: entries that are `<= 0` or `NaN` are skipped (the
+/// \(0 \ln 0 = 0\) convention applied blindly), and unnormalized input can
+/// produce any value, including a negative one (e.g.
+/// `entropy_unchecked(&[2.0])` is \(-2 \ln 2\)). The empty slice returns
+/// `0.0`. Use [`entropy_nats`] when the input is untrusted.
+///
 /// # Examples
 ///
 /// ```
@@ -482,6 +516,7 @@ pub fn tsallis_entropy(p: &[f64], alpha: f64, tol: f64) -> Result<f64> {
 /// assert!((h_pp - h_p).abs() < 1e-12);
 /// ```
 pub fn cross_entropy_nats(p: &[f64], q: &[f64], tol: f64) -> Result<f64> {
+    ensure_same_len(p, q)?;
     validate_simplex(p, tol)?;
     validate_simplex(q, tol)?;
     let mut h = 0.0;
@@ -875,6 +910,18 @@ pub fn normalized_mutual_information(
 ///   MI is the expected value of PMI over the joint distribution.
 /// - **Connection to word2vec**: Levy & Goldberg (2014) showed that Skip-gram with
 ///   negative sampling implicitly factorizes a PMI matrix (shifted by \(\ln k\)).
+///
+/// # Domain
+///
+/// Result is in nats. Inputs are **not** validated as probabilities (no range
+/// or finiteness check): any of `pxy`, `px`, `py` being `<= 0` triggers the
+/// zero convention below (so negative inputs are silently treated like zero),
+/// and `NaN` propagates into the result. The only rejected inputs are the
+/// impossible combinations `pxy > 0` with `px == 0` or `py == 0`
+/// ([`Error::Domain`]).
+///
+/// By convention, `pmi` returns `Ok(0.0)` whenever `pxy <= 0`, `px <= 0`, or
+/// `py <= 0` (and the error condition above does not apply).
 ///
 /// # Examples
 ///
@@ -1324,6 +1371,12 @@ pub fn rho_alpha(p: &[f64], q: &[f64], alpha: f64, tol: f64) -> Result<f64> {
 /// assert!((r1 - kl).abs() < 1e-12);
 /// ```
 pub fn renyi_divergence(p: &[f64], q: &[f64], alpha: f64, tol: f64) -> Result<f64> {
+    if !alpha.is_finite() || alpha <= 0.0 {
+        return Err(Error::InvalidAlpha {
+            alpha,
+            forbidden: 0.0,
+        });
+    }
     if (alpha - 1.0).abs() < 1e-12 {
         return kl_divergence(p, q, tol);
     }
@@ -1373,6 +1426,12 @@ pub fn renyi_divergence(p: &[f64], q: &[f64], alpha: f64, tol: f64) -> Result<f6
 /// assert!((t1 - kl).abs() < 1e-12);
 /// ```
 pub fn tsallis_divergence(p: &[f64], q: &[f64], alpha: f64, tol: f64) -> Result<f64> {
+    if !alpha.is_finite() || alpha <= 0.0 {
+        return Err(Error::InvalidAlpha {
+            alpha,
+            forbidden: 0.0,
+        });
+    }
     if (alpha - 1.0).abs() < 1e-12 {
         return kl_divergence(p, q, tol);
     }

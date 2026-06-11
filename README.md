@@ -50,7 +50,7 @@ doc_a-doc_c    0.6931  21.4651  21.0799
 Note: JS is symmetric and bounded [0, ln2]; KL is asymmetric and unbounded.
 ```
 
-See `examples/` for more: `ksg_mutual_information`, `ksg_multivariate`, `feature_selection`.
+See `examples/` for more: `ksg_mutual_information`, `ksg_multivariate`, `feature_selection`, `distance_families`.
 
 ## Usage
 
@@ -72,13 +72,15 @@ let js = jensen_shannon_divergence(&p, &q, 1e-9).unwrap(); // JS divergence
 
 The `tol` parameter controls how strictly inputs are validated as probability distributions. Use `1e-9` for normalized inputs; use `1e-6` if inputs may have minor floating-point drift.
 
+All entropies and divergences are in nats unless the function name says bits (`entropy_bits`). Invalid input (empty slices, negative or NaN entries, unnormalized distributions, `q_i = 0` where `p_i > 0`) returns an `Err`; nothing panics. The KSG estimator can return small negative values on finite samples; clamp with `.max(0.0)` if you need a nonnegative MI.
+
 ## Tests
 
 ```bash
 cargo test -p logp
 ```
 
-133 tests (99 unit + 34 doc-tests) covering all public API functions, including property-based tests for KL non-negativity, Pinsker's inequality and tightness, JS boundedness, sqrt(JS) and Hellinger and total variation triangle inequality, Renyi divergence and entropy monotonicity in alpha, Renyi/Tsallis alpha=1 Shannon limit, Amari alpha-KL correspondence, Csiszar f-divergence with KL/Hellinger/chi-squared generators, Bhattacharyya-Renyi consistency, Bhattacharyya precision for near-identical distributions, Bregman non-negativity, entropy concavity, cross-entropy decomposition, conditional entropy chain rule, chi-squared/KL upper bound, total Bregman normalization, NegEntropy Bregman/KL equivalence, digamma precision at DLMF reference values, PMI edge cases and impossible-input errors, near-boundary numerical robustness, data processing inequality for discrete MI, f-divergence monotonicity under coarse-graining, streaming log-sum-exp, weighted JS entropy bounds, KSG estimator accuracy against Gaussian ground truth, and KSG ties handling.
+Unit, doc, and property-based tests cover all public API functions, including KL non-negativity, Pinsker's inequality and tightness, JS boundedness, sqrt(JS) and Hellinger and total variation triangle inequality, Renyi divergence and entropy monotonicity in alpha, Renyi/Tsallis alpha=1 Shannon limit, Amari alpha-KL correspondence, Csiszar f-divergence with KL/Hellinger/chi-squared generators, Bhattacharyya-Renyi consistency, Bhattacharyya precision for near-identical distributions, Bregman non-negativity, entropy concavity, cross-entropy decomposition, conditional entropy chain rule, chi-squared/KL upper bound, total Bregman normalization, NegEntropy Bregman/KL equivalence, digamma precision at DLMF reference values, PMI edge cases and impossible-input errors, near-boundary numerical robustness, data processing inequality for discrete MI, f-divergence monotonicity under coarse-graining, streaming log-sum-exp, weighted JS entropy bounds, KSG estimator accuracy against Gaussian ground truth, and KSG ties handling. Edge-case pins (empty input, zero probabilities, unnormalized input, exact error variants) live in `tests/edge_cases.rs`.
 
 ## License
 
