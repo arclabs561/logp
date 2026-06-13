@@ -19,10 +19,13 @@ categories = ["algorithms", "science", "mathematics"]
 default = []
 # Optional ndarray adapter for users who keep joint distributions as matrices.
 ndarray = ["dep:ndarray"]
+# Optional serde derives on the persistable data types (e.g. distprop::Gaussian).
+serde = ["dep:serde"]
 
 [dependencies]
 thiserror = "2.0"
 ndarray = { version = "0.16", optional = true }
+serde = { version = "1.0", optional = true, features = ["derive"] }
 
 [dev-dependencies]
 proptest = "1.5"

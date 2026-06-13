@@ -26,6 +26,7 @@ use crate::{Error, Result};
 /// do not re-validate: a hand-built `Gaussian` with negative or non-finite
 /// fields propagates through unchecked.
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Gaussian {
     /// Mean of the distribution.
     pub mean: f64,
