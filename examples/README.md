@@ -1,20 +1,30 @@
 # logp examples
 
-Examples for the `logp` information theory crate.
+## Where to start
 
-## Running
+| I want to... | Run |
+|---|---|
+| Compare divergence families on simple distributions | `divergence_landscape` |
+| Compare f-divergence, OT, and MMD rankings | `distance_families` |
+| Estimate MI for correlated Gaussian variables | `ksg_mutual_information` |
+| See KSG behavior in a 10D joint space | `ksg_multivariate` |
+| Rank synthetic features by mutual information | `feature_selection` |
+| Flag categorical distribution drift | `text_similarity` |
 
 ```sh
-cargo run -p logp --example <name>
+cargo run --example divergence_landscape
+cargo run --example distance_families
+cargo run --example ksg_mutual_information
+cargo run --example ksg_multivariate
+cargo run --example feature_selection
+cargo run --example text_similarity
 ```
 
-## Examples
+## What to inspect
 
-| Example | Description |
-|---|---|
-| `distance_families` | Cross-crate comparison of distance families on discrete distributions: f-divergences (logp), optimal transport (wass), kernel MMD (rkhs). Shows where different geometries agree and disagree on ranking distribution pairs. Requires dev-dependencies `wass` and `rkhs`. |
-| `divergence_landscape` | Sweeps p = [t, 1-t] against q = [0.5, 0.5] and prints a table of KL, JS, Hellinger, Bhattacharyya, Renyi, and Tsallis divergences. Includes a Renyi alpha sweep demonstrating continuity at alpha = 1. |
-| `ksg_mutual_information` | Bivariate Gaussian MI estimation with the KSG estimator. Sweeps correlation rho from 0 to 0.99 and compares estimates against the closed-form MI = -0.5 * ln(1 - rho^2). |
-| `ksg_multivariate` | KSG MI estimation in high dimensions (5D + 5D = 10D joint). Shows convergence as sample size increases from 200 to 5000. Demonstrates that KSG works where histogram-based estimators would need 10^10 bins. |
-| `feature_selection` | Feature selection via KSG mutual information. Generates a synthetic dataset (8 features, 1 target) with linear, nonlinear, and noise features. Ranks features by MI to identify the informative subset. |
-| `text_similarity` | Distribution shift detection for categorical features. Simulates a reference distribution and incoming batches with increasing drift. Uses JS and KL divergence to flag anomalous batches. |
+- `divergence_landscape` shows why KL can grow while JS stays bounded by `ln(2)`.
+- `distance_families` compares rankings from f-divergences, optimal transport, and kernel MMD on the same discrete distributions.
+- `ksg_mutual_information` compares KSG estimates against the closed-form Gaussian MI curve.
+- `ksg_multivariate` shows sample-size sensitivity in a 5D plus 5D setting where histogram estimators would be sparse.
+- `feature_selection` ranks linear, nonlinear, and noise features by estimated MI with the target.
+- `text_similarity` is a categorical drift example despite the historical filename: it simulates reference and incoming batch distributions and flags drift with JS/KL.
