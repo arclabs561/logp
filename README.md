@@ -35,22 +35,25 @@ Observations:
   - Hellinger saturates at 1.0; Bhattacharyya diverges
 ```
 
-**Document similarity via bag-of-words**. JS divergence between word frequency distributions as a simple text similarity measure:
+**Categorical drift detection**. JS and KL divergence compare an incoming categorical batch against a reference distribution:
 
 ```bash
 cargo run --example text_similarity
 ```
 
 ```text
-Pair               JS  KL(a|b)  KL(b|a)
-----------------------------------------
-doc_a-doc_b    0.2310   7.0780   7.0780
-doc_a-doc_c    0.6931  21.4651  21.0799
+batch                JS  KL(b|r)    KL(r|b)     alert?
+------------------------------------------------------
+no_drift        0.00000  0.00000    0.00000         no
+mild_drift      0.00307  0.01310    0.01164         no
+moderate        0.01889  0.08575    0.06951        YES
+severe_drift    0.06655  0.31664    0.24658        YES
+broken_etl      0.24331  1.04635    1.15254        YES
 
-Note: JS is symmetric and bounded [0, ln2]; KL is asymmetric and unbounded.
+JS is symmetric and bounded; KL is asymmetric.
 ```
 
-See `examples/` for more: `ksg_mutual_information`, `ksg_multivariate`, `feature_selection`, `distance_families`.
+See [`examples/README.md`](examples/README.md) for the full example map: `ksg_mutual_information`, `ksg_multivariate`, `feature_selection`, `distance_families`, and the drift-detection example above.
 
 ## Usage
 
