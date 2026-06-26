@@ -151,7 +151,10 @@ fn divergence_invariants() {
         let kl = kl_divergence(&p, &q, 1e-9).expect("kl");
         assert!(kl >= -1e-12, "KL negative: {kl}");
         let js = jensen_shannon_divergence(&p, &q, 1e-9).expect("js");
-        assert!(js >= -1e-12 && js <= LN2 + 1e-9, "JS {js} out of [0,ln2]");
+        assert!(
+            (-1e-12..=LN2 + 1e-9).contains(&js),
+            "JS {js} out of [0,ln2]"
+        );
         let js_rev = jensen_shannon_divergence(&q, &p, 1e-9).expect("js");
         assert!(
             (js - js_rev).abs() < 1e-12,
