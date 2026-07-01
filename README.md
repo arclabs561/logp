@@ -83,7 +83,14 @@ All entropies and divergences are in nats unless the function name says bits (`e
 cargo test -p logp
 ```
 
-Unit, doc, and property-based tests cover all public API functions, including KL non-negativity, Pinsker's inequality and tightness, JS boundedness, sqrt(JS) and Hellinger and total variation triangle inequality, Renyi divergence and entropy monotonicity in alpha, Renyi/Tsallis alpha=1 Shannon limit, Amari alpha-KL correspondence, Csiszar f-divergence with KL/Hellinger/chi-squared generators, Bhattacharyya-Renyi consistency, Bhattacharyya precision for near-identical distributions, Bregman non-negativity, entropy concavity, cross-entropy decomposition, conditional entropy chain rule, chi-squared/KL upper bound, total Bregman normalization, NegEntropy Bregman/KL equivalence, digamma precision at DLMF reference values, PMI edge cases and impossible-input errors, near-boundary numerical robustness, data processing inequality for discrete MI, f-divergence monotonicity under coarse-graining, streaming log-sum-exp, weighted JS entropy bounds, KSG estimator accuracy against Gaussian ground truth, and KSG ties handling. Edge-case pins (empty input, zero probabilities, unnormalized input, exact error variants) live in `tests/edge_cases.rs`.
+Unit, doc, and property-based tests cover the public API.
+
+Main invariants include non-negativity, boundedness, triangle inequalities,
+alpha-limit behavior, entropy identities, data-processing inequalities, and
+KSG accuracy against Gaussian ground truth.
+
+Edge-case tests cover empty input, zero probabilities, unnormalized input,
+exact error variants, near-boundary precision, and KSG ties.
 
 ## License
 
