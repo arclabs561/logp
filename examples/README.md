@@ -11,6 +11,12 @@
 | Rank synthetic features by mutual information | `feature_selection` |
 | Flag categorical distribution drift | `text_similarity` |
 
+## Example dependencies
+
+| Dependency | Example | Check |
+|---|---|---|
+| `wass`, `rkhs` | `distance_families` | f-divergence, optimal-transport, and MMD rankings on the same distributions |
+
 ```sh
 cargo run --example divergence_landscape
 cargo run --example distance_families
