@@ -2,7 +2,6 @@
 
 [![crates.io](https://img.shields.io/crates/v/logp.svg)](https://crates.io/crates/logp)
 [![Documentation](https://docs.rs/logp/badge.svg)](https://docs.rs/logp)
-[![CI](https://github.com/arclabs561/logp/actions/workflows/ci.yml/badge.svg)](https://github.com/arclabs561/logp/actions/workflows/ci.yml)
 
 Information theory primitives.
 
@@ -11,11 +10,12 @@ Information theory primitives.
 logp = "0.2.3"
 ```
 
-Discrete distributions: Shannon/Renyi/Tsallis entropy, KL/JS/Hellinger/Bhattacharyya divergence, chi-squared divergence, total variation, f-divergences. Continuous distributions: KSG mutual information estimator (type I and II). All validated by property-based tests (KL non-negativity, Pinsker's inequality, JS boundedness, sqrt(JS) triangle inequality).
+`logp` covers entropy, divergences, f-divergences, and KSG mutual information
+for validated probability inputs.
 
 ## Examples
 
-**Divergence landscape**. Sweep all divergences over a family of binary distributions to see how they behave as distributions diverge:
+**Divergence sweep**. Compare divergences over a family of binary distributions:
 
 ```bash
 cargo run --example divergence_landscape
