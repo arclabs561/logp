@@ -3,6 +3,12 @@
 All notable changes to this crate are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com).
 
+## [Unreleased]
+
+### Fixed
+
+- `distprop::activations::softplus` now remains finite for large finite inputs.
+
 ## [0.2.3] - 2026-06-10
 
 ### Fixed

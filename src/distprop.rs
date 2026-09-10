@@ -5,10 +5,7 @@
 //!
 //! Two approximation methods:
 //! - **Linearization** (first-order Taylor): output ~ N(f(mu), f'(mu)^2 * sigma^2)
-//! - **Unscented transform**: sigma-point propagation (more accurate for nonlinear f)
-//!
-//! Based on: Petersen et al., "Distribution Propagation" -- propagating
-//! distributions through computational graphs via moment matching.
+//! - **Unscented transform**: three-point sigma-point propagation
 //!
 //! ## When to use
 //!
@@ -194,7 +191,7 @@ pub mod activations {
     /// Softplus: f(x) = ln(1 + exp(x)). Smooth approximation to ReLU.
     pub fn softplus() -> DifferentiableFunc {
         DifferentiableFunc {
-            f: Box::new(|x| (1.0 + x.exp()).ln()),
+            f: Box::new(|x| x.max(0.0) + (-x.abs()).exp().ln_1p()),
             df: Box::new(|x| 1.0 / (1.0 + (-x).exp())),
         }
     }
@@ -254,6 +251,21 @@ mod tests {
         // ReLU(3) = 3, ReLU'(3) = 1
         assert!((out.mean - 3.0).abs() < 1e-12);
         assert!((out.std - 0.5).abs() < 1e-12);
+    }
+
+    #[test]
+    fn softplus_is_stable_and_has_expected_derivative() {
+        let softplus = activations::softplus();
+
+        assert_eq!((softplus.f)(1000.0), 1000.0);
+        assert_eq!((softplus.df)(1000.0), 1.0);
+
+        assert!(((softplus.f)(0.0) - 2.0_f64.ln()).abs() < 1e-12);
+        assert!(((softplus.df)(0.0) - 0.5).abs() < 1e-12);
+
+        let exp_neg_one = (-1.0_f64).exp();
+        assert!(((softplus.f)(-1.0) - exp_neg_one.ln_1p()).abs() < 1e-12);
+        assert!(((softplus.df)(-1.0) - exp_neg_one / (1.0 + exp_neg_one)).abs() < 1e-12);
     }
 
     #[test]
