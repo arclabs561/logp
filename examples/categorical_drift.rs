@@ -11,7 +11,7 @@
 //! country, product category) with a known reference distribution, then generates
 //! batches with increasing levels of drift. KL and JS divergence quantify the shift.
 //!
-//! Run: cargo run --example text_similarity
+//! Run: cargo run --example categorical_drift
 
 use logp::{entropy_nats, jensen_shannon_divergence, kl_divergence};
 

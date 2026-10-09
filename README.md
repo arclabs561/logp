@@ -38,7 +38,7 @@ Observations:
 **Categorical drift detection**. JS and KL divergence compare an incoming categorical batch against a reference distribution:
 
 ```bash
-cargo run --example text_similarity
+cargo run --example categorical_drift
 ```
 
 ```text
@@ -83,7 +83,11 @@ All entropies and divergences are in nats unless the function name says bits (`e
 cargo test -p logp
 ```
 
-Unit, doc, and property-based tests cover the public API.
+Unit, doc, and property-based tests cover the public API. `tests/no_panic.rs`
+feeds arbitrary `f64` values (NaN, infinities, subnormals) into every validated
+function and checks that each returns instead of panicking.
+`tests/rosetta_logp.rs` checks entropy, KL, Jensen-Shannon and discrete mutual
+information against scipy and scikit-learn.
 
 Main invariants include non-negativity, boundedness, triangle inequalities,
 alpha-limit behavior, entropy identities, data-processing inequalities, and
