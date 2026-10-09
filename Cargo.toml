@@ -9,6 +9,14 @@ repository = "https://github.com/arclabs561/logp"
 homepage = "https://github.com/arclabs561/logp"
 documentation = "https://docs.rs/logp"
 readme = "README.md"
+include = [
+  "/src/**/*.rs",
+  "/examples/**/*.rs",
+  "/Cargo.toml",
+  "/CHANGELOG.md",
+  "/LICENSE*",
+  "/README.md",
+]
 rust-version = "1.75"
 keywords = ["information-theory", "entropy", "divergence", "mutual-information", "ksg-estimator"]
 categories = ["algorithms", "science", "mathematics"]
