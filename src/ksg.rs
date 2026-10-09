@@ -104,18 +104,19 @@ pub fn mutual_information_ksg(
     let mut ny = vec![0usize; n];
 
     for i in 0..n {
-        // 1. Find k-th neighbor distance in joint space (infinity norm)
-        let mut joint_dists = Vec::with_capacity(n);
+        // 1. Find the k nearest neighbours in joint space (infinity norm),
+        //    keeping their marginal distances for Alg2.
+        let mut neighbours = Vec::with_capacity(n);
         for j in 0..n {
             if i == j {
                 continue;
             }
             let dx = dist_inf(&x[i], &x[j]);
             let dy = dist_inf(&y[i], &y[j]);
-            joint_dists.push(dx.max(dy));
+            neighbours.push((dx.max(dy), dx, dy));
         }
-        joint_dists.sort_by(|a, b| a.total_cmp(b));
-        let eps = joint_dists[k - 1];
+        neighbours.sort_by(|a, b| a.0.total_cmp(&b.0));
+        let eps = neighbours[k - 1].0;
 
         match variant {
             KsgVariant::Alg1 => {
@@ -132,20 +133,25 @@ pub fn mutual_information_ksg(
                     .count();
             }
             KsgVariant::Alg2 => {
-                // Count neighbors in marginal spaces with distance <= eps.
-                //
-                // KSG Alg2's closed form uses ψ(n_x) and ψ(n_y). For that to be well-defined,
-                // n_x and n_y must be ≥ 1. The standard convention is that Alg2 counts include
-                // the point itself (so the minimum count is 1).
+                // KSG Eq. 9: the k nearest joint neighbours span a rectangle
+                // with half-widths eps_x/2 and eps_y/2 (the largest marginal
+                // distance among them, each usually smaller than eps). Count
+                // j != i inside each half-width. The neighbour attaining it is
+                // counted, so n_x, n_y >= 1 and ψ(n_x), ψ(n_y) are defined.
+                let (eps_x, eps_y) = neighbours[..k]
+                    .iter()
+                    .fold((0.0_f64, 0.0_f64), |(ex, ey), &(_, dx, dy)| {
+                        (ex.max(dx), ey.max(dy))
+                    });
                 nx[i] = x
                     .iter()
                     .enumerate()
-                    .filter(|(j, _)| dist_inf(&x[i], &x[*j]) <= eps || i == *j)
+                    .filter(|(j, _)| i != *j && dist_inf(&x[i], &x[*j]) <= eps_x)
                     .count();
                 ny[i] = y
                     .iter()
                     .enumerate()
-                    .filter(|(j, _)| dist_inf(&y[i], &y[*j]) <= eps || i == *j)
+                    .filter(|(j, _)| i != *j && dist_inf(&y[i], &y[*j]) <= eps_y)
                     .count();
             }
         }
@@ -258,11 +264,40 @@ mod tests {
 
         let mi_est = mutual_information_ksg(&x, &y, 5, KsgVariant::Alg2).unwrap();
         assert!(mi_est.is_finite(), "MI estimate is not finite: {mi_est}");
+        // Baseline for a correct Eq. 9 Alg2 at N=4000, k=5 (20 numpy seeds):
+        // mean 0.514, sd 0.014 against truth 0.511. 12% is about bias + 4 sd.
+        // The old joint-radius/self-count bug sat near -47% and passed at 40%.
         let rel_err = (mi_est - mi_true).abs() / mi_true;
         assert!(
-            rel_err < 0.40,
+            rel_err < 0.12,
             "KSG Alg2 Gaussian ground-truth: mi_est={mi_est:.4}, mi_true={mi_true:.4}, rel_err={rel_err:.3}"
         );
+    }
+
+    #[test]
+    fn ksg_alg2_matches_eq9_reference_value() {
+        // Kraskov et al. (2004) Eq. 9: n_x(i) counts j != i with
+        // |x_i - x_j| <= eps_x(i)/2, where eps_x(i)/2 is the largest x-distance
+        // among the k nearest joint neighbours of i (likewise for y). Values
+        // from an independent numpy/scipy implementation of Eq. 9.
+        let xs = [0.12, 0.85, 0.33, 0.47, 0.91, 0.05, 0.66, 0.29, 0.74, 0.58];
+        let ys = [0.40, 0.77, 0.21, 0.52, 0.95, 0.13, 0.61, 0.36, 0.88, 0.47];
+        let x: Vec<Vec<f64>> = xs.iter().map(|&v| vec![v]).collect();
+        let y: Vec<Vec<f64>> = ys.iter().map(|&v| vec![v]).collect();
+        for (k, want) in [(2, 0.5456349206349205), (3, 0.5923015873015869)] {
+            let mi = mutual_information_ksg(&x, &y, k, KsgVariant::Alg2).unwrap();
+            assert!((mi - want).abs() < 1e-12, "k={k}: {mi} != {want}");
+        }
+    }
+
+    #[test]
+    fn ksg_alg2_independent_gaussians_near_zero() {
+        // Independent N(0,1) pairs have I = 0. A correct Alg2 at N=1000, k=3
+        // gives mean 0.006, sd 0.024 over 5 numpy seeds; the joint-radius and
+        // self-count errors pulled it to about -0.35.
+        let (x, y) = correlated_gaussian_samples(1000, 0.0, 777);
+        let mi = mutual_information_ksg(&x, &y, 3, KsgVariant::Alg2).unwrap();
+        assert!(mi.abs() < 0.1, "Alg2 on independent data gave {mi}");
     }
 
     #[test]
