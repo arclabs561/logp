@@ -77,6 +77,11 @@
 
 use thiserror::Error;
 
+// Compile and run the README's Rust examples as doctests.
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+struct ReadmeDoctests;
+
 pub mod distprop;
 mod ksg;
 pub use ksg::{mutual_information_ksg, KsgVariant};
@@ -747,8 +752,11 @@ pub fn mutual_information(p_xy: &[f64], n_x: usize, n_y: usize, tol: f64) -> Res
             "mutual_information: n_x and n_y must be >= 1",
         ));
     }
-    if p_xy.len() != n_x * n_y {
-        return Err(Error::LengthMismatch(p_xy.len(), n_x * n_y));
+    let cells = n_x.checked_mul(n_y).ok_or(Error::Domain(
+        "mutual_information: n_x * n_y overflows usize",
+    ))?;
+    if p_xy.len() != cells {
+        return Err(Error::LengthMismatch(p_xy.len(), cells));
     }
     validate_simplex(p_xy, tol)?;
 
@@ -869,8 +877,11 @@ pub fn normalized_mutual_information(
     if n_x == 0 || n_y == 0 {
         return Err(Error::Domain("nmi: n_x and n_y must be >= 1"));
     }
-    if p_xy.len() != n_x * n_y {
-        return Err(Error::LengthMismatch(p_xy.len(), n_x * n_y));
+    let cells = n_x
+        .checked_mul(n_y)
+        .ok_or(Error::Domain("nmi: n_x * n_y overflows usize"))?;
+    if p_xy.len() != cells {
+        return Err(Error::LengthMismatch(p_xy.len(), cells));
     }
     validate_simplex(p_xy, tol)?;
 
