@@ -9,6 +9,13 @@ Format: [Keep a Changelog](https://keepachangelog.com).
 
 - `distprop::activations::softplus` now remains finite for large finite inputs.
 
+### Changed
+
+- Clarify KSG algorithm 2's separate marginal half-widths and inclusive counts,
+  self-exclusion, and the continuous-sample assumption. Tied or quantized
+  coordinates are not jittered or corrected; this documents the estimator's
+  assumptions and does not change calculation behavior.
+
 ## [0.2.3] - 2026-06-10
 
 ### Fixed
