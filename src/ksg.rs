@@ -22,9 +22,13 @@ use crate::{digamma, Error, Result};
 /// Algorithm variant for KSG estimator.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KsgVariant {
-    /// Algorithm 1: Neighbors within radius epsilon.
+    /// Algorithm 1: Strict marginal counts within the shared joint max-norm
+    /// kth-neighbor radius, excluding the sample itself.
     Alg1,
-    /// Algorithm 2: Neighbors within radius epsilon/2. More robust for independence tests.
+    /// Algorithm 2: Inclusive marginal counts within separate rectangle
+    /// half-widths, excluding the sample itself. Each half-width is the largest
+    /// marginal distance among the k nearest joint neighbors (the paper's
+    /// epsilon_x/2 and epsilon_y/2), not half of a shared joint radius.
     Alg2,
 }
 
@@ -45,6 +49,10 @@ pub enum KsgVariant {
 ///   required downstream.
 /// - **Cost is O(N² · (Dx + Dy))**: all pairwise distances are computed for
 ///   every point (no spatial index).
+/// - **Continuous samples are assumed.** Duplicate or quantized coordinates
+///   can create tied neighbor distances outside the estimator's continuous-data
+///   assumptions. This function adds no jitter or other tie correction; a
+///   finite result on tied data does not establish an accurate MI estimate.
 /// - **Samples are not checked for finiteness.** `NaN` or infinite coordinates
 ///   are not rejected and yield unspecified results (a `NaN` coordinate
 ///   difference is silently dropped by the max-norm fold, so the result can be
