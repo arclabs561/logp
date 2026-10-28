@@ -44,8 +44,8 @@ fn main() {
 
     println!();
     println!("Observations:");
-    println!("  - KL diverges as p -> delta; JS stays bounded by ln(2) ~ 0.693");
-    println!("  - Hellinger saturates at 1.0; Bhattacharyya diverges");
+    println!("  - With q uniform, KL approaches ln(2) ~ 0.693 as p approaches a point mass");
+    println!("  - Hellinger and Bhattacharyya also remain finite in this sweep");
     println!("  - Renyi(alpha<1) is gentler than KL; Tsallis(alpha>1) is sharper near extremes");
 
     // --- Renyi alpha sweep: continuity at alpha = 1 (0.2.0 feature) ----------

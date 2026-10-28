@@ -10,8 +10,8 @@ Information theory primitives.
 logp = "0.2.3"
 ```
 
-`logp` covers entropy, divergences, f-divergences, and KSG mutual information
-for validated probability inputs.
+`logp` computes entropy and divergences from probability distributions, and
+estimates mutual information from continuous samples with KSG.
 
 ## Examples
 
@@ -31,8 +31,8 @@ t            KL       JS     Hell    Bhatt   Renyi0.5   Tsallis2
 0.950   0.49463  0.14234  0.39075  0.16568    0.33136    0.81000
 
 Observations:
-  - KL diverges as p -> delta; JS stays bounded by ln(2) ~ 0.693
-  - Hellinger saturates at 1.0; Bhattacharyya diverges
+  - With q uniform, KL approaches ln(2) ~ 0.693 as p approaches a point mass
+  - Hellinger and Bhattacharyya also remain finite in this sweep
 ```
 
 **Categorical drift detection**. JS and KL divergence compare an incoming categorical batch against a reference distribution:
@@ -53,7 +53,7 @@ broken_etl      0.24331  1.04635    1.15254        YES
 JS is symmetric and bounded; KL is asymmetric.
 ```
 
-See [`examples/README.md`](examples/README.md) for the full example map: `ksg_mutual_information`, `ksg_multivariate`, `feature_selection`, `distance_families`, and the drift-detection example above.
+See [`examples/README.md`](examples/README.md) for mutual information, feature selection, and other comparisons.
 
 ## Usage
 
@@ -75,7 +75,9 @@ let js = jensen_shannon_divergence(&p, &q, 1e-9).unwrap(); // JS divergence
 
 The `tol` parameter controls how strictly inputs are validated as probability distributions. Use `1e-9` for normalized inputs; use `1e-6` if inputs may have minor floating-point drift.
 
-All entropies and divergences are in nats unless the function name says bits (`entropy_bits`). Invalid input (empty slices, negative or NaN entries, unnormalized distributions, `q_i = 0` where `p_i > 0`) returns an `Err`; nothing panics. The KSG estimator can return small negative values on finite samples; clamp with `.max(0.0)` if you need a nonnegative MI.
+Logarithmic quantities use natural logarithms unless the function name says bits (`entropy_bits`). Validated probability APIs reject empty slices, negative or non-finite entries, and unnormalized distributions. KL also rejects `q_i = 0` where `p_i > 0`; Jensen-Shannon and Hellinger allow disjoint supports.
+
+The KSG estimator takes continuous samples, not probability vectors. It can return small negative values on finite samples; clamp with `.max(0.0)` if you need a nonnegative MI.
 
 ## Tests
 

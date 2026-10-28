@@ -28,7 +28,7 @@ cargo run --example categorical_drift
 
 ## What to inspect
 
-- `divergence_landscape` shows why KL can grow while JS stays bounded by `ln(2)`.
+- `divergence_landscape` compares divergences from a fixed uniform reference; KL approaches `ln(2)` as the other distribution approaches a point mass.
 - `distance_families` compares rankings from f-divergences, optimal transport, and kernel MMD on the same discrete distributions.
 - `ksg_mutual_information` compares KSG estimates against the closed-form Gaussian MI curve.
 - `ksg_multivariate` shows sample-size sensitivity in a 5D plus 5D setting where histogram estimators would be sparse.
