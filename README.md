@@ -15,7 +15,8 @@ estimates mutual information from continuous samples with KSG.
 
 ## Examples
 
-**Divergence sweep**. Compare divergences over a family of binary distributions:
+**Divergence sweep**. Compare divergences over a family of binary distributions
+(output excerpt):
 
 ```bash
 cargo run --example divergence_landscape
@@ -49,18 +50,11 @@ mild_drift      0.00307  0.01310    0.01164         no
 moderate        0.01889  0.08575    0.06951        YES
 severe_drift    0.06655  0.31664    0.24658        YES
 broken_etl      0.24331  1.04635    1.15254        YES
-
-JS is symmetric and bounded; KL is asymmetric.
 ```
 
 See [`examples/README.md`](examples/README.md) for mutual information, feature selection, and other comparisons.
 
 ## Usage
-
-```toml
-[dependencies]
-logp = "0.2.3"
-```
 
 ```rust
 use logp::{entropy_nats, kl_divergence, jensen_shannon_divergence};
@@ -90,13 +84,6 @@ feeds arbitrary `f64` values (NaN, infinities, subnormals) into every validated
 function and checks that each returns instead of panicking.
 `tests/rosetta_logp.rs` checks entropy, KL, Jensen-Shannon and discrete mutual
 information against scipy and scikit-learn.
-
-Main invariants include non-negativity, boundedness, triangle inequalities,
-alpha-limit behavior, entropy identities, data-processing inequalities, and
-KSG accuracy against Gaussian ground truth.
-
-Edge-case tests cover empty input, zero probabilities, unnormalized input,
-exact error variants, near-boundary precision, and KSG ties.
 
 ## License
 
