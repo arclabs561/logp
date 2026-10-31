@@ -8,6 +8,8 @@ Format: [Keep a Changelog](https://keepachangelog.com).
 ### Fixed
 
 - `distprop::activations::softplus` now remains finite for large finite inputs.
+- `log_sum_exp_iter` no longer returns NaN when the first value is `-inf`; it
+  now matches `log_sum_exp`.
 
 ### Changed
 

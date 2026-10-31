@@ -1059,6 +1059,11 @@ pub fn log_sum_exp_iter(iter: impl Iterator<Item = f64>) -> f64 {
     let mut sum_exp = 0.0;
 
     for v in iter {
+        if v == f64::NEG_INFINITY {
+            // exp(-inf) = 0 contributes nothing; skipping avoids
+            // exp(-inf - -inf) = NaN while max is still -inf.
+            continue;
+        }
         if v > max {
             if max.is_finite() {
                 // Rescale the running sum when a new max arrives.
@@ -2868,6 +2873,18 @@ mod tests {
         // Same stability test as log_sum_exp: dominated term.
         let lse = log_sum_exp_iter([1000.0, 0.0].iter().copied());
         assert!((lse - 1000.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn log_sum_exp_iter_leading_neg_inf() {
+        // A leading log(0) must not poison the running sum with NaN.
+        let values = [f64::NEG_INFINITY, 0.0, 1.0];
+        let lse_slice = log_sum_exp(&values);
+        let lse_iter = log_sum_exp_iter(values.iter().copied());
+        assert!(
+            (lse_slice - lse_iter).abs() < 1e-12,
+            "slice={lse_slice} iter={lse_iter}"
+        );
     }
 
     // --- Data processing inequality for discrete MI ---
