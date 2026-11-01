@@ -5,8 +5,23 @@ Format: [Keep a Changelog](https://keepachangelog.com).
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-11-01
+
+### Added
+
+- Optional `serde` feature deriving `Serialize`/`Deserialize` on
+  `distprop::Gaussian`.
+
 ### Fixed
 
+- `mutual_information_ksg` with `KsgVariant::Alg2` now follows Kraskov et al.
+  Eq. 9: each marginal count uses that marginal's own half-width (the largest
+  marginal distance among the k nearest joint neighbors) and excludes the
+  sample itself. Previously it used the shared joint radius and counted the
+  sample, biasing estimates low (about -0.35 nats on independent Gaussians).
+  Alg2 results change.
+- `mutual_information` and `normalized_mutual_information` return
+  `Error::Domain` when `n_x * n_y` overflows `usize` instead of panicking.
 - `distprop::activations::softplus` now remains finite for large finite inputs.
 - `log_sum_exp_iter` no longer returns NaN when the first value is `-inf`; it
   now matches `log_sum_exp`.
@@ -16,7 +31,7 @@ Format: [Keep a Changelog](https://keepachangelog.com).
 - Clarify KSG algorithm 2's separate marginal half-widths and inclusive counts,
   self-exclusion, and the continuous-sample assumption. Tied or quantized
   coordinates are not jittered or corrected; this documents the estimator's
-  assumptions and does not change calculation behavior.
+  assumptions and adds no tie handling.
 
 ## [0.2.3] - 2026-06-10
 

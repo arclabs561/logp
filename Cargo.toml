@@ -1,6 +1,6 @@
 [package]
 name = "logp"
-version = "0.2.3"
+version = "0.2.4"
 edition = "2021"
 authors = ["Arc <attobop@gmail.com>"]
 description = "Information theory primitives"

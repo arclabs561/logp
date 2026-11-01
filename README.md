@@ -7,7 +7,7 @@ Information theory primitives.
 
 ```toml
 [dependencies]
-logp = "0.2.3"
+logp = "0.2.4"
 ```
 
 `logp` computes entropy and divergences from probability distributions, and
