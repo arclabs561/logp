@@ -5,6 +5,27 @@ Format: [Keep a Changelog](https://keepachangelog.com).
 
 ## [Unreleased]
 
+### Fixed
+
+- `bhattacharyya_coeff` stays at or below 1. Its sum could round one step
+  above 1 (for example BC(p, p) = 1.0000000000000002 for some p), outside the
+  documented [0, 1] range, which made `acos(BC)` NaN for callers.
+- `bhattacharyya_distance` and `renyi_divergence` no longer return a negative
+  value or `-0.0` produced by rounding; they return `+0.0` there. The README
+  divergence table printed `-0.00000` for both at t = 0.5.
+
+### Changed
+
+- `jensen_shannon_divergence`, `kl_divergence`, `cross_entropy_nats`,
+  `entropy_nats`, `hellinger_squared`, `bhattacharyya_coeff` and
+  `validate_simplex` (from 16 entries) check their inputs inside the compute
+  loop instead of in separate passes; Jensen-Shannon no longer allocates the
+  midpoint or validates p and q three times. Values and errors are unchanged
+  (bit-identical in 60,000 random cases per function). Measured on an M3 Max:
+  Jensen-Shannon about 2x faster from n = 10, Hellinger 2-2.5x and KL and
+  cross-entropy about 1.5x from n = 100. `bregman_divergence` uses a stack
+  buffer for gradients up to 32 entries (17.4 to 9.2 ns at n = 2).
+
 ## [0.2.4] - 2026-11-01
 
 ### Added
