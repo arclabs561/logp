@@ -82,7 +82,6 @@ use thiserror::Error;
 #[doc = include_str!("../README.md")]
 struct ReadmeDoctests;
 
-pub mod distprop;
 mod ksg;
 pub use ksg::{mutual_information_ksg, KsgVariant};
 
@@ -143,6 +142,7 @@ pub fn kl_divergence_gaussians(
 
 /// Errors for information-measure computations.
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum Error {
     /// Two input slices have different lengths (e.g., `p` and `q` in a divergence).
     #[error("length mismatch: {0} vs {1}")]

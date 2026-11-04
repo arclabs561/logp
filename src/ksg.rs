@@ -21,6 +21,7 @@ use crate::{digamma, Error, Result};
 
 /// Algorithm variant for KSG estimator.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum KsgVariant {
     /// Algorithm 1: Strict marginal counts within the shared joint max-norm
     /// kth-neighbor radius, excluding the sample itself.
