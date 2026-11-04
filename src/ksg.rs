@@ -111,34 +111,32 @@ pub fn mutual_information_ksg(
     let mut nx = vec![0usize; n];
     let mut ny = vec![0usize; n];
 
+    // One buffer of (joint, x, y distance, index) per sample, reused across i.
+    let mut neighbours: Vec<(f64, f64, f64, usize)> = Vec::with_capacity(n);
     for i in 0..n {
         // 1. Find the k nearest neighbours in joint space (infinity norm),
-        //    keeping their marginal distances for Alg2.
-        let mut neighbours = Vec::with_capacity(n);
+        //    keeping their marginal distances for Alg2 and for the counts.
+        neighbours.clear();
         for j in 0..n {
             if i == j {
                 continue;
             }
             let dx = dist_inf(&x[i], &x[j]);
             let dy = dist_inf(&y[i], &y[j]);
-            neighbours.push((dx.max(dy), dx, dy));
+            neighbours.push((dx.max(dy), dx, dy, j));
         }
-        neighbours.sort_by(|a, b| a.0.total_cmp(&b.0));
+        // Partial selection instead of a full sort. Ordering ties by index
+        // picks the same k neighbours a stable sort by distance would, so the
+        // result does not depend on the selection algorithm.
+        neighbours.select_nth_unstable_by(k - 1, |a, b| a.0.total_cmp(&b.0).then(a.3.cmp(&b.3)));
         let eps = neighbours[k - 1].0;
 
+        // The marginal distances to every j != i are already in `neighbours`.
         match variant {
             KsgVariant::Alg1 => {
                 // Count neighbors in marginal spaces with distance < eps
-                nx[i] = x
-                    .iter()
-                    .enumerate()
-                    .filter(|(j, _)| i != *j && dist_inf(&x[i], &x[*j]) < eps)
-                    .count();
-                ny[i] = y
-                    .iter()
-                    .enumerate()
-                    .filter(|(j, _)| i != *j && dist_inf(&y[i], &y[*j]) < eps)
-                    .count();
+                nx[i] = neighbours.iter().filter(|nb| nb.1 < eps).count();
+                ny[i] = neighbours.iter().filter(|nb| nb.2 < eps).count();
             }
             KsgVariant::Alg2 => {
                 // KSG Eq. 9: the k nearest joint neighbours span a rectangle
@@ -148,19 +146,11 @@ pub fn mutual_information_ksg(
                 // counted, so n_x, n_y >= 1 and ψ(n_x), ψ(n_y) are defined.
                 let (eps_x, eps_y) = neighbours[..k]
                     .iter()
-                    .fold((0.0_f64, 0.0_f64), |(ex, ey), &(_, dx, dy)| {
+                    .fold((0.0_f64, 0.0_f64), |(ex, ey), &(_, dx, dy, _)| {
                         (ex.max(dx), ey.max(dy))
                     });
-                nx[i] = x
-                    .iter()
-                    .enumerate()
-                    .filter(|(j, _)| i != *j && dist_inf(&x[i], &x[*j]) <= eps_x)
-                    .count();
-                ny[i] = y
-                    .iter()
-                    .enumerate()
-                    .filter(|(j, _)| i != *j && dist_inf(&y[i], &y[*j]) <= eps_y)
-                    .count();
+                nx[i] = neighbours.iter().filter(|nb| nb.1 <= eps_x).count();
+                ny[i] = neighbours.iter().filter(|nb| nb.2 <= eps_y).count();
             }
         }
     }
