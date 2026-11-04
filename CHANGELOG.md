@@ -5,6 +5,8 @@ Format: [Keep a Changelog](https://keepachangelog.com).
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-11-04
+
 ### Fixed
 
 - `bhattacharyya_coeff` stays at or below 1. Its sum could round one step
