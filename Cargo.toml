@@ -43,3 +43,7 @@ ndarray = "0.16"
 # Rosetta cross-language correctness fixtures (tests/rosetta_*.rs).
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+
+[[bench]]
+name = "primitives"
+harness = false
