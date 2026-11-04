@@ -242,6 +242,17 @@ fn sum_start() -> f64 {
     core::iter::empty::<f64>().sum()
 }
 
+/// Map a divergence that is nonnegative in exact arithmetic but came out
+/// negative or `-0.0` from rounding to `+0.0`. NaN passes through.
+#[inline]
+fn nonneg_rounding(x: f64) -> f64 {
+    if x <= 0.0 {
+        0.0
+    } else {
+        x
+    }
+}
+
 /// Branch-free form of the per-entry test in [`ensure_nonnegative`].
 #[inline(always)]
 fn entry_ok(v: f64) -> bool {
@@ -1303,7 +1314,9 @@ pub fn bhattacharyya_coeff(p: &[f64], q: &[f64], tol: f64) -> Result<f64> {
         validate_simplex(p, tol)?;
         validate_simplex(q, tol)?;
     }
-    Ok(bc)
+    // The sum can round a step above 1 (for example BC(p, p) for some p), which
+    // breaks the documented [0, 1] range and makes `acos(BC)` NaN for callers.
+    Ok(bc.min(1.0))
 }
 
 /// Bhattacharyya distance \(D_B(p,q) = -\ln BC(p,q)\).
@@ -1326,7 +1339,7 @@ pub fn bhattacharyya_distance(p: &[f64], q: &[f64], tol: f64) -> Result<f64> {
     if bc == 0.0 {
         return Err(Error::Domain("Bhattacharyya distance is infinite (BC=0)"));
     }
-    Ok(-bc.ln())
+    Ok(nonneg_rounding(-bc.ln()))
 }
 
 /// Squared Hellinger distance.
@@ -1519,7 +1532,7 @@ pub fn renyi_divergence(p: &[f64], q: &[f64], alpha: f64, tol: f64) -> Result<f6
     if rho <= 0.0 {
         return Err(Error::Domain("rho_alpha <= 0"));
     }
-    Ok(rho.ln() / (alpha - 1.0))
+    Ok(nonneg_rounding(rho.ln() / (alpha - 1.0)))
 }
 
 /// Tsallis divergence: a non-extensive generalization of KL divergence from

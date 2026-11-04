@@ -119,7 +119,10 @@ mod old {
             .zip(q.iter())
             .map(|(&pi, &qi)| pi.sqrt() * qi.sqrt())
             .sum();
-        Ok(bc)
+        // The pre-fusion function returned `bc` unclamped. Clamping to 1 is a
+        // separate, intended fix (pinned in tests/rounding_bounds.rs), so the
+        // reference applies it to keep this a test of the fusion alone.
+        Ok(bc.min(1.0))
     }
 
     pub fn hellinger_squared(p: &[f64], q: &[f64], tol: f64) -> Result<f64> {
