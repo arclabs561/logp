@@ -5,6 +5,8 @@ Format: [Keep a Changelog](https://keepachangelog.com).
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-11-04
+
 ### Fixed
 
 - `kl_divergence` is finite when `p_i / q_i` overflows (for example
