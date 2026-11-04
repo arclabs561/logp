@@ -5,6 +5,27 @@ Format: [Keep a Changelog](https://keepachangelog.com).
 
 ## [Unreleased]
 
+### Fixed
+
+- `kl_divergence` is finite when `p_i / q_i` overflows (for example
+  `q_i = 1e-310`); it falls back to `ln p_i - ln q_i` there instead of
+  returning infinity.
+- `jensen_shannon_divergence` is finite, as documented, when a midpoint
+  `m_i = (p_i + q_i) / 2` rounds to zero for a subnormal entry; it returned
+  `Error::Domain`. The reference copies in `tests/fused_equivalence.rs` use the
+  same log terms.
+- `normalize_in_place` returns `Error::Domain` when the sum of finite entries
+  overflows `f64`, instead of zeroing the vector and returning `Ok(inf)`.
+- `rho_alpha` is continuous at `alpha = 0` and `alpha = 1`: a zero entry
+  contributes 0 (the limit as `alpha -> 0+`), so `rho_0(p, q) = Q(p > 0)` as in
+  the order-0 Rényi divergence. It returned 1 for disjoint supports.
+- `amari_alpha_divergence` no longer snaps to KL within `sqrt(tol)` of
+  `alpha = ±1`; the simplex tolerance changed the result (by 1e-4 at
+  `alpha = -0.95` with `tol = 1e-2`). It now uses a fixed `1e-8` window.
+- `digamma` uses two more asymptotic terms and matches
+  `scipy.special.digamma` to 1e-14 relative error, as documented; it was off by
+  up to 7e-13 for `x < 10`.
+
 ## [0.3.0] - 2026-11-04
 
 ### Added

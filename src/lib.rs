@@ -338,6 +338,9 @@ pub fn normalize_in_place(p: &mut [f64]) -> Result<f64> {
     if s <= 0.0 {
         return Err(Error::Domain("cannot normalize: sum <= 0"));
     }
+    if !s.is_finite() {
+        return Err(Error::Domain("cannot normalize: sum overflows f64"));
+    }
     for v in p.iter_mut() {
         *v /= s;
     }
@@ -667,7 +670,7 @@ pub fn kl_divergence(p: &[f64], q: &[f64], tol: f64) -> Result<f64> {
             if qi <= 0.0 {
                 undefined = true;
             } else {
-                d += pi * (pi / qi).ln();
+                d += pi * ln_ratio(pi, qi);
             }
         }
     }
@@ -679,6 +682,18 @@ pub fn kl_divergence(p: &[f64], q: &[f64], tol: f64) -> Result<f64> {
         return Err(Error::Domain("KL undefined: q_i=0 while p_i>0"));
     }
     Ok(d)
+}
+
+/// `ln(a / b)` for `a, b > 0`. Falls back to `ln a - ln b` when the quotient
+/// overflows to infinity or underflows to zero (for example `b` subnormal),
+/// where `ln(a / b)` would be infinite although both logarithms are finite.
+fn ln_ratio(a: f64, b: f64) -> f64 {
+    let r = a / b;
+    if r.is_finite() && r > 0.0 {
+        r.ln()
+    } else {
+        a.ln() - b.ln()
+    }
 }
 
 /// Jensen--Shannon divergence in nats: a symmetric, bounded smoothing of KL divergence.
@@ -729,29 +744,22 @@ pub fn jensen_shannon_divergence(p: &[f64], q: &[f64], tol: f64) -> Result<f64> 
     let mut ok_pq = !p.is_empty();
     let mut ok_m = true;
     let (mut sp, mut sq, mut sm) = (sum_start(), sum_start(), sum_start());
-    let mut undefined = false;
     let (mut dp, mut dq) = (0.0, 0.0);
     for (&pi, &qi) in p.iter().zip(q.iter()) {
         ok_pq &= entry_ok(pi) & entry_ok(qi);
         sp += pi;
         sq += qi;
-        let mi = 0.5 * (pi + qi);
+        let s = pi + qi;
+        let mi = 0.5 * s;
         ok_m &= entry_ok(mi);
         sm += mi;
-        // `mi` can underflow to 0 for subnormal inputs; KL(_||m) then errors.
+        // x / m_i as 2 (x / s): `mi` can underflow to 0 for subnormal inputs,
+        // while s > 0 whenever x > 0. Equal to x / mi wherever mi is normal.
         if pi != 0.0 {
-            if mi <= 0.0 {
-                undefined = true;
-            } else {
-                dp += pi * (pi / mi).ln();
-            }
+            dp += pi * (2.0 * (pi / s)).ln();
         }
         if qi != 0.0 {
-            if mi <= 0.0 {
-                undefined = true;
-            } else {
-                dq += qi * (qi / mi).ln();
-            }
+            dq += qi * (2.0 * (qi / s)).ln();
         }
     }
     if !(ok_pq && sum_ok(sp, tol) && sum_ok(sq, tol)) {
@@ -763,9 +771,6 @@ pub fn jensen_shannon_divergence(p: &[f64], q: &[f64], tol: f64) -> Result<f64> 
         // the same error the inner `kl_divergence` validation produced.
         let m: Vec<f64> = p.iter().zip(q).map(|(&a, &b)| 0.5 * (a + b)).collect();
         validate_simplex(&m, tol)?;
-    }
-    if undefined {
-        return Err(Error::Domain("KL undefined: q_i=0 while p_i>0"));
     }
     Ok(0.5 * dp + 0.5 * dq)
 }
@@ -1304,7 +1309,7 @@ pub fn log_softmax(x: &[f64]) -> Vec<f64> {
 /// # use logp::digamma;
 /// // psi(1) = -gamma (Euler-Mascheroni constant).
 /// let psi1 = digamma(1.0);
-/// assert!((psi1 - (-0.5772156649)).abs() < 1e-12);
+/// assert!((psi1 - (-0.577_215_664_901_532_9)).abs() < 1e-14);
 ///
 /// // Recurrence: psi(x+1) = psi(x) + 1/x.
 /// let x = 3.5;
@@ -1320,8 +1325,8 @@ pub fn digamma(mut x: f64) -> f64 {
     }
     let mut result = 0.0;
     // Shift x upward via the recurrence psi(x+1) = psi(x) + 1/x until x >= 10,
-    // where the asymptotic expansion converges to ~1e-14 with 4 Bernoulli terms.
-    // (Previous threshold of 7 with 3 terms gave ~1e-10 accuracy.)
+    // where the asymptotic expansion with 6 Bernoulli terms has truncation
+    // error below B14 / (14 x^14) ~ 1e-15. (4 terms left ~7e-13.)
     while x < 10.0 {
         result -= 1.0 / x;
         x += 1.0;
@@ -1330,8 +1335,13 @@ pub fn digamma(mut x: f64) -> f64 {
     result += x.ln() - 0.5 * r;
     let r2 = r * r;
     // Bernoulli-number correction terms: B_{2k} / (2k * x^{2k}).
-    // B2/2 = 1/12, B4/4 = 1/120, B6/6 = 1/252, B8/8 = 1/240.
-    result -= r2 * (1.0 / 12.0 - r2 * (1.0 / 120.0 - r2 * (1.0 / 252.0 - r2 / 240.0)));
+    // B2/2 = 1/12, B4/4 = 1/120, B6/6 = 1/252, B8/8 = 1/240,
+    // B10/10 = 1/132, B12/12 = 691/32760 (alternating signs).
+    result -= r2
+        * (1.0 / 12.0
+            - r2 * (1.0 / 120.0
+                - r2 * (1.0 / 252.0
+                    - r2 * (1.0 / 240.0 - r2 * (1.0 / 132.0 - r2 * (691.0 / 32760.0))))));
     result
 }
 
@@ -1487,11 +1497,10 @@ fn pow_nonneg(x: f64, a: f64) -> Result<f64> {
         return Err(Error::Domain("pow_nonneg: invalid input"));
     }
     if x == 0.0 {
-        if a == 0.0 {
-            // By continuity in the divergence formulas, treat 0^0 as 1.
-            return Ok(1.0);
-        }
-        if a > 0.0 {
+        // 0^0 := 0, the limit of 0^a as a -> 0+. This keeps rho_alpha
+        // continuous at alpha = 0 and alpha = 1, where a zero entry of p
+        // (resp. q) contributes nothing for every nearby alpha in (0, 1).
+        if a >= 0.0 {
             return Ok(0.0);
         }
         return Err(Error::Domain("0^a for a<0 is infinite"));
@@ -1701,8 +1710,10 @@ pub fn amari_alpha_divergence(p: &[f64], q: &[f64], alpha: f64, tol: f64) -> Res
             forbidden: f64::NAN,
         });
     }
-    // Numerically stable handling near ±1.
-    let eps = tol.sqrt();
+    // Near ±1, 1 - rho cancels: its rounding error is about 1e-16 / |1 ± alpha|,
+    // while snapping to KL is off by O(|1 ± alpha|). A fixed 1e-8 balances the
+    // two; it does not depend on `tol`, which only validates the simplex.
+    let eps = 1e-8;
     if (alpha + 1.0).abs() <= eps {
         return kl_divergence(p, q, tol);
     }
