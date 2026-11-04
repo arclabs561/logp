@@ -5,6 +5,8 @@ Format: [Keep a Changelog](https://keepachangelog.com).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-04
+
 ### Added
 
 - `softmax`, `softmax_in_place` and `log_softmax`. `softmax` is the
