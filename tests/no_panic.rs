@@ -87,8 +87,6 @@ proptest! {
         let _ = log_sum_exp(&[a, b, c]);
         let _ = log_sum_exp2(a, b);
         let _ = digamma(a);
-        let _ = distprop::Gaussian::new(a, b);
-        let _ = distprop::Gaussian::point(a);
     }
 
     #[test]

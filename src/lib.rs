@@ -82,7 +82,6 @@ use thiserror::Error;
 #[doc = include_str!("../README.md")]
 struct ReadmeDoctests;
 
-pub mod distprop;
 mod ksg;
 pub use ksg::{mutual_information_ksg, KsgVariant};
 
@@ -143,6 +142,7 @@ pub fn kl_divergence_gaussians(
 
 /// Errors for information-measure computations.
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum Error {
     /// Two input slices have different lengths (e.g., `p` and `q` in a divergence).
     #[error("length mismatch: {0} vs {1}")]
@@ -1201,6 +1201,77 @@ pub fn log_sum_exp_iter(iter: impl Iterator<Item = f64>) -> f64 {
         return max; // Handles NEG_INFINITY (empty) and POS_INFINITY.
     }
     max + sum_exp.ln()
+}
+
+/// Softmax: `exp(x_i) / sum_j exp(x_j)`, computed as `exp(x_i - max) / sum`
+/// so large logits do not overflow.
+///
+/// An empty input returns an empty vector. Inputs are not validated: an
+/// infinite or `NaN` logit, or all logits equal to `-inf`, yields `NaN`
+/// entries, as the max-shifted formula does. For a temperature `t`, pass
+/// `x_i / t`.
+///
+/// # Examples
+///
+/// ```
+/// # use logp::softmax;
+/// let p = softmax(&[1.0, 2.0, 3.0]);
+/// assert!((p.iter().sum::<f64>() - 1.0).abs() < 1e-12);
+/// assert!(p[2] > p[1] && p[1] > p[0]);
+/// // Shifting every logit leaves the result unchanged, and huge logits are fine.
+/// let q = softmax(&[1001.0, 1002.0, 1003.0]);
+/// assert!(p.iter().zip(&q).all(|(a, b)| (a - b).abs() < 1e-12));
+/// ```
+pub fn softmax(x: &[f64]) -> Vec<f64> {
+    let mut out = x.to_vec();
+    softmax_in_place(&mut out);
+    out
+}
+
+/// [`softmax`] overwriting `x`, without allocating.
+///
+/// # Examples
+///
+/// ```
+/// # use logp::{softmax, softmax_in_place};
+/// let mut v = [0.5, -1.0, 2.0];
+/// softmax_in_place(&mut v);
+/// assert_eq!(v.to_vec(), softmax(&[0.5, -1.0, 2.0]));
+/// ```
+pub fn softmax_in_place(x: &mut [f64]) {
+    let max = x.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+    let mut sum = 0.0;
+    for v in x.iter_mut() {
+        *v = (*v - max).exp();
+        sum += *v;
+    }
+    for v in x.iter_mut() {
+        *v /= sum;
+    }
+}
+
+/// Log-softmax: `x_i - log_sum_exp(x)`, the logarithm of [`softmax`] without
+/// computing it and taking the log (which loses precision for tiny
+/// probabilities and gives `-inf` once they underflow).
+///
+/// An empty input returns an empty vector; non-finite input propagates as in
+/// [`log_sum_exp`].
+///
+/// # Examples
+///
+/// ```
+/// # use logp::{log_softmax, softmax};
+/// let x = [0.0, 1.0, 2.0];
+/// let lp = log_softmax(&x);
+/// for (l, p) in lp.iter().zip(softmax(&x)) {
+///     assert!((l.exp() - p).abs() < 1e-12);
+/// }
+/// // Where softmax underflows to 0, log_softmax stays finite.
+/// assert!(log_softmax(&[0.0, 800.0])[0].is_finite());
+/// ```
+pub fn log_softmax(x: &[f64]) -> Vec<f64> {
+    let lse = log_sum_exp(x);
+    x.iter().map(|&v| v - lse).collect()
 }
 
 /// Digamma function: the logarithmic derivative of the Gamma function.

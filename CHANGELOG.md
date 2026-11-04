@@ -5,6 +5,33 @@ Format: [Keep a Changelog](https://keepachangelog.com).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-04
+
+### Added
+
+- `softmax`, `softmax_in_place` and `log_softmax`. `softmax` is the
+  max-shifted formula several crates carried privately, bit for bit;
+  `log_softmax` is `x - log_sum_exp(x)` and stays finite where softmax
+  underflows to 0.
+
+### Changed
+
+- `mutual_information_ksg` selects the k-th neighbour by partial selection
+  and reuses stored marginal distances for its counts. Estimates are bitwise
+  unchanged (ties broken by sample index, as the stable sort did); at n = 3000
+  it measured about 13x faster.
+- Breaking: `Error` and `KsgVariant` are `#[non_exhaustive]`, so variants can
+  be added without another breaking release. Exhaustive matches need a
+  wildcard arm.
+
+### Removed
+
+- Breaking: the `distprop` module (Gaussian propagation through nonlinear
+  functions by linearization or the unscented transform) and the `serde`
+  feature, which only derived serde traits on `distprop::Gaussian`.
+  Distribution propagation is outside this crate's information-theory scope;
+  `stableprop` covers Gaussian moment matching.
+
 ## [0.2.5] - 2026-11-04
 
 ### Fixed
