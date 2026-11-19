@@ -107,3 +107,30 @@ fn digamma_matches_scipy_reference() {
         );
     }
 }
+
+#[test]
+fn weighted_js_retains_positive_mass_below_mixture_precision() {
+    use logp::jensen_shannon_weighted;
+    let tiny = f64::from_bits(1);
+    let identical = [tiny, 1.0];
+    let equal = jensen_shannon_divergence(&identical, &identical, 0.0).unwrap();
+    assert_eq!(
+        jensen_shannon_weighted(&identical, &identical, 0.5, 0.0).unwrap(),
+        equal
+    );
+
+    let p = [tiny, 0.75, 0.25];
+    let q = [0.0, 0.25, 0.75];
+    for weight in [0.125, 0.25, 0.5] {
+        let expected = jensen_shannon_weighted(&p[1..], &q[1..], weight, 0.0).unwrap();
+        let forward = jensen_shannon_weighted(&p, &q, weight, 0.0).unwrap();
+        let reverse = jensen_shannon_weighted(&q, &p, 1.0 - weight, 0.0).unwrap();
+        assert_eq!(forward, expected);
+        assert_eq!(reverse, expected);
+    }
+
+    // At the smallest positive weight, the first mixture entry is tiny / 2.
+    // The exact result is about 372.37346 units of the smallest subnormal.
+    let js = jensen_shannon_weighted(&[0.5, 0.5], &[0.0, 1.0], tiny, 0.0).unwrap();
+    assert!((js / tiny - 372.37346).abs() <= 1.0);
+}

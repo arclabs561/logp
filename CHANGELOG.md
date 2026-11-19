@@ -5,6 +5,10 @@ Format: [Keep a Changelog](https://keepachangelog.com).
 
 ## [Unreleased]
 
+### Fixed
+
+- Weighted Jensen–Shannon divergence handles positive mixture entries that round to zero.
+
 ## [0.3.1] - 2026-11-04
 
 ### Fixed

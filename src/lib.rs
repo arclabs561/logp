@@ -814,24 +814,31 @@ pub fn jensen_shannon_weighted(p: &[f64], q: &[f64], pi1: f64, tol: f64) -> Resu
     if !(0.0..=1.0).contains(&pi1) || !pi1.is_finite() {
         return Err(Error::Domain("pi1 must be in [0, 1]"));
     }
-    let pi2 = 1.0 - pi1;
-
-    let mut m = vec![0.0; p.len()];
-    for i in 0..p.len() {
-        m[i] = pi1 * p[i] + pi2 * q[i];
+    if pi1 == 0.0 || pi1 == 1.0 {
+        return Ok(0.0);
     }
+    let pi2 = 1.0 - pi1;
+    let m: Vec<_> = p.iter().zip(q).map(|(&a, &b)| pi1 * a + pi2 * b).collect();
+    validate_simplex(&m, tol)?;
 
-    // When pi1 or pi2 is zero, the corresponding KL term is 0 * D_KL = 0.
-    let kl_p = if pi1 > 0.0 {
-        kl_divergence(p, &m, tol)?
-    } else {
-        0.0
-    };
-    let kl_q = if pi2 > 0.0 {
-        kl_divergence(q, &m, tol)?
-    } else {
-        0.0
-    };
+    let (mut kl_p, mut kl_q) = (0.0, 0.0);
+    for ((&a, &b), &mi) in p.iter().zip(q).zip(&m) {
+        let log_ratio = |x: f64| {
+            if mi >= f64::MIN_POSITIVE {
+                ln_ratio(x, mi)
+            } else {
+                // Both weights are positive. Recover log(m_i) before the
+                // weighted probabilities lose precision or round to zero.
+                x.ln() - log_sum_exp2(pi1.ln() + a.ln(), pi2.ln() + b.ln())
+            }
+        };
+        if a > 0.0 {
+            kl_p += a * log_ratio(a);
+        }
+        if b > 0.0 {
+            kl_q += b * log_ratio(b);
+        }
+    }
     Ok(pi1 * kl_p + pi2 * kl_q)
 }
 
