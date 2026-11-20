@@ -1512,22 +1512,6 @@ pub fn hellinger(p: &[f64], q: &[f64], tol: f64) -> Result<f64> {
     Ok(hellinger_squared(p, q, tol)?.sqrt())
 }
 
-fn pow_nonneg(x: f64, a: f64) -> Result<f64> {
-    if x < 0.0 || !x.is_finite() || !a.is_finite() {
-        return Err(Error::Domain("pow_nonneg: invalid input"));
-    }
-    if x == 0.0 {
-        // 0^0 := 0, the limit of 0^a as a -> 0+. This keeps rho_alpha
-        // continuous at alpha = 0 and alpha = 1, where a zero entry of p
-        // (resp. q) contributes nothing for every nearby alpha in (0, 1).
-        if a >= 0.0 {
-            return Ok(0.0);
-        }
-        return Err(Error::Domain("0^a for a<0 is infinite"));
-    }
-    Ok(x.powf(a))
-}
-
 /// Alpha-integral: the workhorse behind the entire alpha-family of divergences.
 ///
 /// \[\rho_\alpha(p, q) = \sum_i p_i^\alpha \, q_i^{1-\alpha}\]
@@ -1563,6 +1547,24 @@ fn pow_nonneg(x: f64, a: f64) -> Result<f64> {
 /// assert!((rho - bc).abs() < 1e-12);
 /// ```
 pub fn rho_alpha(p: &[f64], q: &[f64], alpha: f64, tol: f64) -> Result<f64> {
+    Ok(log_rho_alpha(p, q, alpha, tol)?.exp())
+}
+
+// Near equality, subtraction retains bits lost to a rounded quotient.
+fn alpha_log_ratio(p: f64, q: f64) -> f64 {
+    if (0.5..=2.0).contains(&(p / q)) {
+        ((p - q) / q).ln_1p()
+    } else if p < q {
+        -ln_ratio(q, p)
+    } else {
+        ln_ratio(p, q)
+    }
+}
+
+// Use q * (p/q)^alpha near order zero, and p * (p/q)^(alpha-1)
+// near order one. Separate powers can multiply zero by infinity even
+// when their product is an ordinary probability.
+fn log_rho_alpha(p: &[f64], q: &[f64], alpha: f64, tol: f64) -> Result<f64> {
     ensure_same_len(p, q)?;
     validate_simplex(p, tol)?;
     validate_simplex(q, tol)?;
@@ -1572,22 +1574,26 @@ pub fn rho_alpha(p: &[f64], q: &[f64], alpha: f64, tol: f64) -> Result<f64> {
             forbidden: f64::NAN,
         });
     }
-    let mut s = 0.0;
-    for (&pi, &qi) in p.iter().zip(q.iter()) {
-        // A bin outside both supports contributes nothing for every alpha,
-        // the same convention KL and the f-divergences use. Without this,
-        // alpha > 1 (or alpha < 0) asked for 0^negative and errored, so even
-        // rho_alpha(p, p, 2) failed when p had a zero entry. A bin where only
-        // the factor with the negative exponent is zero is a true infinity
-        // and still errors.
-        if pi == 0.0 && qi == 0.0 {
+    if p == q {
+        return Ok(sum(p).ln());
+    }
+    let mut log_sum = f64::NEG_INFINITY;
+    for (&pi, &qi) in p.iter().zip(q) {
+        if pi == 0.0 || qi == 0.0 {
+            if (pi == 0.0 && qi > 0.0 && alpha < 0.0) || (qi == 0.0 && pi > 0.0 && alpha > 1.0) {
+                return Err(Error::Domain("0^a for a<0 is infinite"));
+            }
             continue;
         }
-        let a = pow_nonneg(pi, alpha)?;
-        let b = pow_nonneg(qi, 1.0 - alpha)?;
-        s += a * b;
+        let (base, exponent) = if alpha <= 0.5 {
+            (qi, alpha)
+        } else {
+            (pi, alpha - 1.0)
+        };
+        let term = exponent.mul_add(alpha_log_ratio(pi, qi), base.ln());
+        log_sum = log_sum_exp2(log_sum, term);
     }
-    Ok(s)
+    Ok(log_sum)
 }
 
 /// Renyi divergence in nats: a one-parameter family that interpolates between
@@ -1637,11 +1643,21 @@ pub fn renyi_divergence(p: &[f64], q: &[f64], alpha: f64, tol: f64) -> Result<f6
     if (alpha - 1.0).abs() < 1e-12 {
         return kl_divergence(p, q, tol);
     }
-    let rho = rho_alpha(p, q, alpha, tol)?;
-    if rho <= 0.0 {
+    let log_rho = log_rho_alpha(p, q, alpha, tol)?;
+    if log_rho == f64::NEG_INFINITY {
         return Err(Error::Domain("rho_alpha <= 0"));
     }
-    Ok(nonneg_rounding(rho.ln() / (alpha - 1.0)))
+    if log_rho == f64::INFINITY {
+        // The logarithm itself overflowed. At this scale log(p_i)/(alpha-1)
+        // is below one ulp and only the largest log likelihood ratio matters.
+        return Ok(p
+            .iter()
+            .zip(q)
+            .filter(|(pi, _)| **pi > 0.0)
+            .map(|(&pi, &qi)| alpha_log_ratio(pi, qi))
+            .fold(f64::NEG_INFINITY, f64::max));
+    }
+    Ok(nonneg_rounding(log_rho / (alpha - 1.0)))
 }
 
 /// Tsallis divergence: a non-extensive generalization of KL divergence from
@@ -1692,7 +1708,12 @@ pub fn tsallis_divergence(p: &[f64], q: &[f64], alpha: f64, tol: f64) -> Result<
     if (alpha - 1.0).abs() < 1e-12 {
         return kl_divergence(p, q, tol);
     }
-    Ok((rho_alpha(p, q, alpha, tol)? - 1.0) / (alpha - 1.0))
+    let log_rho = log_rho_alpha(p, q, alpha, tol)?;
+    let numerator = log_rho.exp_m1();
+    if numerator == f64::INFINITY {
+        return Ok((log_rho - (alpha - 1.0).ln()).exp());
+    }
+    Ok(numerator / (alpha - 1.0))
 }
 
 /// Amari alpha-divergence: a one-parameter family from information geometry that
@@ -1750,8 +1771,14 @@ pub fn amari_alpha_divergence(p: &[f64], q: &[f64], alpha: f64, tol: f64) -> Res
         return kl_divergence(q, p, tol);
     }
     let t = (1.0 - alpha) / 2.0;
-    let rho = rho_alpha(p, q, t, tol)?;
-    Ok((4.0 / (1.0 - alpha * alpha)) * (1.0 - rho))
+    let log_rho = log_rho_alpha(p, q, t, tol)?;
+    let numerator = log_rho.exp_m1();
+    if numerator == f64::INFINITY {
+        return Ok(
+            (log_rho + 4.0_f64.ln() - (alpha - 1.0).abs().ln() - (alpha + 1.0).abs().ln()).exp(),
+        );
+    }
+    Ok((numerator / (alpha - 1.0)) * (4.0 / (alpha + 1.0)))
 }
 
 /// Csiszar f-divergence: the most general class of divergences that respect

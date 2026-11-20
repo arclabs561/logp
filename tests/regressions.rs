@@ -66,6 +66,35 @@ fn rho_alpha_is_continuous_at_zero_and_one_with_zero_entries() {
     );
 }
 
+#[test]
+fn positive_bins_survive_extreme_orders() {
+    let p = [0.25, 0.75];
+    let q = [0.5, 0.5];
+    let tol = 1e-9;
+    for order in [-600.0, 600.0, f64::MAX] {
+        assert_eq!(rho_alpha(&p, &p, order, tol).unwrap(), 1.0);
+    }
+
+    // rho = (0.5^a + 1.5^a)/2. At 1600 the sum fits in f64 and
+    // the smaller term is negligible. At 1760 only the divergences fit.
+    let log_expected = |a: f64| a * 1.5_f64.ln() - 2.0_f64.ln();
+    let rho = rho_alpha(&p, &q, 1600.0, tol).unwrap();
+    assert!((rho / log_expected(1600.0).exp() - 1.0).abs() < 2e-13);
+    assert_eq!(rho_alpha(&q, &p, -1599.0, tol).unwrap(), rho);
+    assert!(rho_alpha(&p, &q, 1760.0, tol).unwrap().is_infinite());
+    let log_rho = log_expected(1760.0);
+    let renyi = logp::renyi_divergence(&p, &q, 1760.0, tol).unwrap();
+    assert!((renyi - log_rho / 1759.0).abs() < 1e-14);
+    let tsallis = logp::tsallis_divergence(&p, &q, 1760.0, tol).unwrap();
+    assert!((tsallis / (log_rho - 1759.0_f64.ln()).exp() - 1.0).abs() < 2e-13);
+    let amari = amari_alpha_divergence(&p, &q, -3519.0, tol).unwrap();
+    assert!((amari / (log_rho - (1759.0_f64 * 1760.0).ln()).exp() - 1.0).abs() < 3e-13);
+
+    // Even log(rho) exceeds MAX here. The finite divergence approaches ln(4).
+    let renyi = logp::renyi_divergence(&q, &[0.125, 0.875], f64::MAX, tol).unwrap();
+    assert!((renyi - 4.0_f64.ln()).abs() < 1e-14);
+}
+
 /// The simplex validation tolerance does not change which divergence
 /// `amari_alpha_divergence` computes: alpha = -0.95 is not alpha = -1.
 #[test]
