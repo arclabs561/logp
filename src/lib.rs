@@ -684,20 +684,22 @@ pub fn kl_divergence(p: &[f64], q: &[f64], tol: f64) -> Result<f64> {
     Ok(d)
 }
 
+/// `ln(pxy / (px * py))`. A subnormal product or quotient can lose most
+/// of its significant bits even when the resulting logarithm is finite.
+fn ln_joint_over_marginals(pxy: f64, px: f64, py: f64) -> f64 {
+    let product = px * py;
+    if product.is_normal() {
+        let ratio = pxy / product;
+        if ratio.is_normal() {
+            return ratio.ln();
+        }
+    }
+    pxy.ln() - px.ln() - py.ln()
+}
+
 /// `ln(a / b)` for `a, b > 0`. Falls back to `ln a - ln b` when the quotient
 /// overflows to infinity or underflows to zero (for example `b` subnormal),
 /// where `ln(a / b)` would be infinite although both logarithms are finite.
-/// `ln(pxy / (px * py))` without forming `px * py`, which underflows to zero
-/// for marginals below about 1e-162 and turned the ratio into +inf.
-fn ln_joint_over_marginals(pxy: f64, px: f64, py: f64) -> f64 {
-    let r = pxy / (px * py);
-    if r.is_finite() && r > 0.0 {
-        r.ln()
-    } else {
-        pxy.ln() - px.ln() - py.ln()
-    }
-}
-
 fn ln_ratio(a: f64, b: f64) -> f64 {
     let r = a / b;
     if r.is_finite() && r > 0.0 {
@@ -2430,14 +2432,28 @@ mod tests {
         // so px * py = 1e-400 underflows to zero.
         let p_xy = [1e-200, 0.0, 0.0, 1.0];
         let mi = mutual_information(&p_xy, 2, 2, 1e-9).unwrap();
-        assert!(mi.is_finite() && mi >= 0.0 && mi < 1e-190, "mi={mi}");
+        let expected = 1e-200 * (200.0 * std::f64::consts::LN_10);
+        assert!((mi / expected - 1.0).abs() < 1e-12, "mi={mi}");
         let h = conditional_entropy(&p_xy, 2, 2, 1e-9).unwrap();
-        assert!(h.is_finite(), "h={h}");
+        assert!((h / expected).abs() < 1e-12, "h={h}");
         let got = pmi(1e-200, 1e-200, 1e-200).unwrap();
         assert!(
             (got - 200.0 * std::f64::consts::LN_10).abs() < 1e-9,
             "pmi={got}"
         );
+    }
+
+    #[test]
+    fn pmi_handles_finite_subnormal_intermediates() {
+        let rare = 2e-162_f64;
+        assert!((rare * rare).is_subnormal());
+        assert!((pmi(rare, rare, rare).unwrap() + rare.ln()).abs() < 1e-12);
+
+        let joint = f64::from_bits(1);
+        let (px, py) = (0.25_f64, 0.75_f64);
+        assert!((joint / (px * py)).is_subnormal());
+        let expected = joint.ln() - (px * py).ln();
+        assert!((pmi(joint, px, py).unwrap() - expected).abs() < 1e-12);
     }
 
     #[test]
