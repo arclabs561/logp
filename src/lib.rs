@@ -687,6 +687,17 @@ pub fn kl_divergence(p: &[f64], q: &[f64], tol: f64) -> Result<f64> {
 /// `ln(a / b)` for `a, b > 0`. Falls back to `ln a - ln b` when the quotient
 /// overflows to infinity or underflows to zero (for example `b` subnormal),
 /// where `ln(a / b)` would be infinite although both logarithms are finite.
+/// `ln(pxy / (px * py))` without forming `px * py`, which underflows to zero
+/// for marginals below about 1e-162 and turned the ratio into +inf.
+fn ln_joint_over_marginals(pxy: f64, px: f64, py: f64) -> f64 {
+    let r = pxy / (px * py);
+    if r.is_finite() && r > 0.0 {
+        r.ln()
+    } else {
+        pxy.ln() - px.ln() - py.ln()
+    }
+}
+
 fn ln_ratio(a: f64, b: f64) -> f64 {
     let r = a / b;
     if r.is_finite() && r > 0.0 {
@@ -916,7 +927,7 @@ pub fn mutual_information(p_xy: &[f64], n_x: usize, n_y: usize, tol: f64) -> Res
                         "mutual_information: p(x)=0 or p(y)=0 while p(x,y)>0",
                     ));
                 }
-                mi += pxy * (pxy / (px * py)).ln();
+                mi += pxy * ln_joint_over_marginals(pxy, px, py);
             }
         }
     }
@@ -1098,7 +1109,7 @@ pub fn pmi(pxy: f64, px: f64, py: f64) -> Result<f64> {
     if pxy <= 0.0 || px <= 0.0 || py <= 0.0 {
         Ok(0.0)
     } else {
-        Ok((pxy / (px * py)).ln())
+        Ok(ln_joint_over_marginals(pxy, px, py))
     }
 }
 
@@ -1561,6 +1572,15 @@ pub fn rho_alpha(p: &[f64], q: &[f64], alpha: f64, tol: f64) -> Result<f64> {
     }
     let mut s = 0.0;
     for (&pi, &qi) in p.iter().zip(q.iter()) {
+        // A bin outside both supports contributes nothing for every alpha,
+        // the same convention KL and the f-divergences use. Without this,
+        // alpha > 1 (or alpha < 0) asked for 0^negative and errored, so even
+        // rho_alpha(p, p, 2) failed when p had a zero entry. A bin where only
+        // the factor with the negative exponent is zero is a true infinity
+        // and still errors.
+        if pi == 0.0 && qi == 0.0 {
+            continue;
+        }
         let a = pow_nonneg(pi, alpha)?;
         let b = pow_nonneg(qi, 1.0 - alpha)?;
         s += a * b;
@@ -2371,6 +2391,53 @@ mod tests {
                 "recurrence at x={x}: {lhs} vs {rhs}"
             );
         }
+    }
+
+    #[test]
+    fn alpha_family_skips_bins_outside_both_supports() {
+        let p = [0.5, 0.5, 0.0];
+        let q = [0.4, 0.6, 0.0];
+        let tol = 1e-9;
+        for alpha in [2.0, 3.5, -1.5] {
+            let with_zero = rho_alpha(&p, &q, alpha, tol).unwrap();
+            let without = rho_alpha(&p[..2], &q[..2], alpha, tol).unwrap();
+            assert!((with_zero - without).abs() < 1e-15, "alpha={alpha}");
+        }
+        assert!((rho_alpha(&p, &p, 2.0, tol).unwrap() - 1.0).abs() < 1e-12);
+        let expected = (0.25f64 / 0.4 + 0.25 / 0.6).ln();
+        assert!((renyi_divergence(&p, &q, 2.0, tol).unwrap() - expected).abs() < 1e-12);
+        assert_eq!(renyi_divergence(&p, &p, 2.0, tol).unwrap(), 0.0);
+        assert!(tsallis_divergence(&p, &q, 2.0, tol).unwrap() > 0.0);
+        for alpha in [2.0, -2.0] {
+            let with_zero = amari_alpha_divergence(&p, &q, alpha, tol).unwrap();
+            let without = amari_alpha_divergence(&p[..2], &q[..2], alpha, tol).unwrap();
+            assert!((with_zero - without).abs() < 1e-12, "alpha={alpha}");
+        }
+    }
+
+    #[test]
+    fn alpha_family_still_rejects_a_true_infinity() {
+        // p has mass where q has none: D_2(p || q) is infinite.
+        let p = [0.5, 0.25, 0.25];
+        let q = [0.5, 0.5, 0.0];
+        assert!(rho_alpha(&p, &q, 2.0, 1e-9).is_err());
+        assert!(renyi_divergence(&p, &q, 2.0, 1e-9).is_err());
+    }
+
+    #[test]
+    fn mutual_information_survives_marginals_whose_product_underflows() {
+        // X and Y are perfectly dependent; one outcome has probability 1e-200,
+        // so px * py = 1e-400 underflows to zero.
+        let p_xy = [1e-200, 0.0, 0.0, 1.0];
+        let mi = mutual_information(&p_xy, 2, 2, 1e-9).unwrap();
+        assert!(mi.is_finite() && mi >= 0.0 && mi < 1e-190, "mi={mi}");
+        let h = conditional_entropy(&p_xy, 2, 2, 1e-9).unwrap();
+        assert!(h.is_finite(), "h={h}");
+        let got = pmi(1e-200, 1e-200, 1e-200).unwrap();
+        assert!(
+            (got - 200.0 * std::f64::consts::LN_10).abs() < 1e-9,
+            "pmi={got}"
+        );
     }
 
     #[test]
