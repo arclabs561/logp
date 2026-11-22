@@ -667,7 +667,7 @@ pub fn kl_divergence(p: &[f64], q: &[f64], tol: f64) -> Result<f64> {
             if qi <= 0.0 {
                 undefined = true;
             } else {
-                d += pi * (pi / qi).ln();
+                d += pi * ln_ratio(pi, qi);
             }
         }
     }
@@ -679,6 +679,18 @@ pub fn kl_divergence(p: &[f64], q: &[f64], tol: f64) -> Result<f64> {
         return Err(Error::Domain("KL undefined: q_i=0 while p_i>0"));
     }
     Ok(d)
+}
+
+/// `ln(a / b)` for `a, b > 0`. Falls back to `ln a - ln b` when the quotient
+/// overflows to infinity or underflows to zero (for example `b` subnormal),
+/// where `ln(a / b)` would be infinite although both logarithms are finite.
+fn ln_ratio(a: f64, b: f64) -> f64 {
+    let r = a / b;
+    if r.is_finite() && r > 0.0 {
+        r.ln()
+    } else {
+        a.ln() - b.ln()
+    }
 }
 
 /// Jensen--Shannon divergence in nats: a symmetric, bounded smoothing of KL divergence.
@@ -729,29 +741,22 @@ pub fn jensen_shannon_divergence(p: &[f64], q: &[f64], tol: f64) -> Result<f64> 
     let mut ok_pq = !p.is_empty();
     let mut ok_m = true;
     let (mut sp, mut sq, mut sm) = (sum_start(), sum_start(), sum_start());
-    let mut undefined = false;
     let (mut dp, mut dq) = (0.0, 0.0);
     for (&pi, &qi) in p.iter().zip(q.iter()) {
         ok_pq &= entry_ok(pi) & entry_ok(qi);
         sp += pi;
         sq += qi;
-        let mi = 0.5 * (pi + qi);
+        let s = pi + qi;
+        let mi = 0.5 * s;
         ok_m &= entry_ok(mi);
         sm += mi;
-        // `mi` can underflow to 0 for subnormal inputs; KL(_||m) then errors.
+        // x / m_i as 2 (x / s): `mi` can underflow to 0 for subnormal inputs,
+        // while s > 0 whenever x > 0. Equal to x / mi wherever mi is normal.
         if pi != 0.0 {
-            if mi <= 0.0 {
-                undefined = true;
-            } else {
-                dp += pi * (pi / mi).ln();
-            }
+            dp += pi * (2.0 * (pi / s)).ln();
         }
         if qi != 0.0 {
-            if mi <= 0.0 {
-                undefined = true;
-            } else {
-                dq += qi * (qi / mi).ln();
-            }
+            dq += qi * (2.0 * (qi / s)).ln();
         }
     }
     if !(ok_pq && sum_ok(sp, tol) && sum_ok(sq, tol)) {
@@ -763,9 +768,6 @@ pub fn jensen_shannon_divergence(p: &[f64], q: &[f64], tol: f64) -> Result<f64> 
         // the same error the inner `kl_divergence` validation produced.
         let m: Vec<f64> = p.iter().zip(q).map(|(&a, &b)| 0.5 * (a + b)).collect();
         validate_simplex(&m, tol)?;
-    }
-    if undefined {
-        return Err(Error::Domain("KL undefined: q_i=0 while p_i>0"));
     }
     Ok(0.5 * dp + 0.5 * dq)
 }

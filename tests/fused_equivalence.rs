@@ -5,6 +5,11 @@
 //! called `kl_divergence` twice). Each public function must agree with its old
 //! copy on every input: `Ok` values bit for bit, and errors with identical
 //! `Debug` output (variant, index, offending value, reported sum).
+//!
+//! The KL and Jensen-Shannon copies differ from the originals only in their
+//! log terms, which avoid infinite or undefined values when `p_i / q_i`
+//! overflows or `m_i` underflows (see `tests/regressions.rs`); validation
+//! and error reporting are unchanged.
 
 use logp::{BregmanGenerator, Error, NegEntropy, Result, SquaredL2};
 
@@ -91,7 +96,13 @@ mod old {
             if qi <= 0.0 {
                 return Err(Error::Domain("KL undefined: q_i=0 while p_i>0"));
             }
-            d += pi * (pi / qi).ln();
+            let r = pi / qi;
+            d += pi
+                * if r.is_finite() && r > 0.0 {
+                    r.ln()
+                } else {
+                    pi.ln() - qi.ln()
+                };
         }
         Ok(d)
     }
@@ -106,8 +117,20 @@ mod old {
         for i in 0..p.len() {
             m[i] = 0.5 * (p[i] + q[i]);
         }
+        // The inner KL calls validated m before computing.
+        validate_simplex(&m, tol)?;
 
-        Ok(0.5 * kl_divergence(p, &m, tol)? + 0.5 * kl_divergence(q, &m, tol)?)
+        // KL(x || m) with x_i / m_i taken as 2 (x_i / (p_i + q_i)).
+        let kl_to_m = |x: &[f64]| -> f64 {
+            let mut d = 0.0;
+            for i in 0..x.len() {
+                if x[i] != 0.0 {
+                    d += x[i] * (2.0 * (x[i] / (p[i] + q[i]))).ln();
+                }
+            }
+            d
+        };
+        Ok(0.5 * kl_to_m(p) + 0.5 * kl_to_m(q))
     }
 
     pub fn bhattacharyya_coeff(p: &[f64], q: &[f64], tol: f64) -> Result<f64> {
@@ -416,13 +439,13 @@ fn bregman_matches_old_across_stack_threshold() {
 // --- Pinned edge cases the random generator may hit only rarely ---
 
 #[test]
-fn js_subnormal_midpoint_underflow_is_domain_error() {
-    // m_1 = 0.5 * (5e-324 + 0) rounds to 0, so KL(p || m) is undefined. The
-    // old implementation reported this from the inner kl_divergence call.
+fn js_subnormal_midpoint_underflow_is_finite() {
+    // m_1 = 0.5 * (5e-324 + 0) rounds to 0, but p_1 / m_1 = 2 exactly, so the
+    // term is finite; JS is documented as always finite on the simplex.
     let p = [1.0, 5e-324];
     let q = [1.0, 0.0];
     let r = logp::jensen_shannon_divergence(&p, &q, 1e-9);
-    assert!(matches!(r, Err(Error::Domain(_))), "{r:?}");
+    assert!(matches!(r, Ok(v) if v.is_finite()), "{r:?}");
     assert!(same(r, old::jensen_shannon_divergence(&p, &q, 1e-9)));
 }
 
