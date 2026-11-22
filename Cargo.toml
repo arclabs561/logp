@@ -34,7 +34,7 @@ ndarray = { version = "0.16", optional = true }
 
 [dev-dependencies]
 proptest = "1.5"
-wass = "0.2.2"
+wass = "0.3.0"
 rkhs = "0.3.0"
 ndarray = "0.16"
 # Rosetta cross-language correctness fixtures (tests/rosetta_*.rs).
