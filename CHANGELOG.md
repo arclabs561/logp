@@ -5,6 +5,12 @@ Format: [Keep a Changelog](https://keepachangelog.com).
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-11-22
+
+### Fixed
+
+- Rényi and Tsallis divergence preserve finite values just below order one when the reference distribution has a zero-mass bin.
+
 ## [0.3.1] - 2026-11-04
 
 ### Fixed

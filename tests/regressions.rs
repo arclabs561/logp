@@ -107,3 +107,18 @@ fn digamma_matches_scipy_reference() {
         );
     }
 }
+
+#[test]
+fn sparse_divergences_stay_finite_just_below_order_one() {
+    let (p, q) = ([0.5, 0.5], [1.0, 0.0]);
+    let alpha: f64 = 1.0 - 5e-13;
+    let log_rho = alpha * 0.5_f64.ln();
+    let renyi = logp::renyi_divergence(&p, &q, alpha, 1e-12).unwrap();
+    let tsallis = logp::tsallis_divergence(&p, &q, alpha, 1e-12).unwrap();
+    assert!((renyi / (log_rho / (alpha - 1.0)) - 1.0).abs() < 1e-12);
+    assert!((tsallis / (log_rho.exp_m1() / (alpha - 1.0)) - 1.0).abs() < 1e-12);
+    for order in [1.0, 1.0 + 5e-13] {
+        assert!(logp::renyi_divergence(&p, &q, order, 1e-12).is_err());
+        assert!(logp::tsallis_divergence(&p, &q, order, 1e-12).is_err());
+    }
+}

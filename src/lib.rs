@@ -1561,6 +1561,12 @@ pub fn rho_alpha(p: &[f64], q: &[f64], alpha: f64, tol: f64) -> Result<f64> {
     Ok(s)
 }
 
+// Below order one, a zero in q can give a finite divergence even when KL is undefined.
+fn use_kl_limit(p: &[f64], q: &[f64], alpha: f64) -> bool {
+    alpha == 1.0
+        || ((alpha - 1.0).abs() < 1e-12 && !p.iter().zip(q).any(|(&p, &q)| p > 0.0 && q == 0.0))
+}
+
 /// Renyi divergence in nats: a one-parameter family that interpolates between
 /// different notions of distributional difference.
 ///
@@ -1605,7 +1611,7 @@ pub fn renyi_divergence(p: &[f64], q: &[f64], alpha: f64, tol: f64) -> Result<f6
             forbidden: 0.0,
         });
     }
-    if (alpha - 1.0).abs() < 1e-12 {
+    if use_kl_limit(p, q, alpha) {
         return kl_divergence(p, q, tol);
     }
     let rho = rho_alpha(p, q, alpha, tol)?;
@@ -1660,7 +1666,7 @@ pub fn tsallis_divergence(p: &[f64], q: &[f64], alpha: f64, tol: f64) -> Result<
             forbidden: 0.0,
         });
     }
-    if (alpha - 1.0).abs() < 1e-12 {
+    if use_kl_limit(p, q, alpha) {
         return kl_divergence(p, q, tol);
     }
     Ok((rho_alpha(p, q, alpha, tol)? - 1.0) / (alpha - 1.0))
