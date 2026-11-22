@@ -5,6 +5,11 @@ Format: [Keep a Changelog](https://keepachangelog.com).
 
 ## [Unreleased]
 
+### Fixed
+
+- Backported the 0.3.1 finite KL and Jensen–Shannon calculations for positive
+  subnormal probabilities. Older callers can keep the 0.2 public API.
+
 ## [0.2.5] - 2026-11-04
 
 ### Fixed
