@@ -1596,10 +1596,37 @@ fn log_rho_alpha(p: &[f64], q: &[f64], alpha: f64, tol: f64) -> Result<f64> {
     Ok(log_sum)
 }
 
-// Below order one, a zero in q can give a finite divergence even when KL is undefined.
-fn use_kl_limit(p: &[f64], q: &[f64], alpha: f64) -> bool {
-    alpha == 1.0
-        || ((alpha - 1.0).abs() < 1e-12 && !p.iter().zip(q).any(|(&p, &q)| p > 0.0 && q == 0.0))
+// A support mismatch rules out the KL limit below order one. Compute the
+// deficit from unit mass directly when losing a tiny bin, and use log-sums
+// instead when almost all the mass is missing.
+fn near_one_log_rho(p: &[f64], q: &[f64], alpha: f64, tol: f64) -> Result<Option<f64>> {
+    if !(alpha < 1.0 && 1.0 - alpha < 1e-12) {
+        return Ok(None);
+    }
+    let missing: f64 = p
+        .iter()
+        .zip(q)
+        .filter(|(_, qi)| **qi == 0.0)
+        .map(|(&pi, _)| pi)
+        .sum();
+    if missing == 0.0 {
+        return Ok(None);
+    }
+    ensure_same_len(p, q)?;
+    validate_simplex(p, tol)?;
+    validate_simplex(q, tol)?;
+    let shared = p.iter().zip(q).filter(|(pi, qi)| **pi > 0.0 && **qi > 0.0);
+    let log_rho = if missing <= 0.5 {
+        let change: f64 = shared
+            .map(|(&pi, &qi)| pi * ((alpha - 1.0) * ln_ratio(pi, qi)).exp_m1())
+            .sum();
+        (change - missing).ln_1p()
+    } else {
+        shared.fold(f64::NEG_INFINITY, |sum, (&pi, &qi)| {
+            log_sum_exp2(sum, (alpha - 1.0).mul_add(ln_ratio(pi, qi), pi.ln()))
+        })
+    };
+    Ok(Some(log_rho))
 }
 
 /// Renyi divergence in nats: a one-parameter family that interpolates between
@@ -1646,7 +1673,13 @@ pub fn renyi_divergence(p: &[f64], q: &[f64], alpha: f64, tol: f64) -> Result<f6
             forbidden: 0.0,
         });
     }
-    if use_kl_limit(p, q, alpha) {
+    if let Some(log_rho) = near_one_log_rho(p, q, alpha, tol)? {
+        if log_rho == f64::NEG_INFINITY {
+            return Err(Error::Domain("rho_alpha <= 0"));
+        }
+        return Ok(nonneg_rounding(log_rho / (alpha - 1.0)));
+    }
+    if (alpha - 1.0).abs() < 1e-12 {
         return kl_divergence(p, q, tol);
     }
     let log_rho = log_rho_alpha(p, q, alpha, tol)?;
@@ -1711,7 +1744,10 @@ pub fn tsallis_divergence(p: &[f64], q: &[f64], alpha: f64, tol: f64) -> Result<
             forbidden: 0.0,
         });
     }
-    if use_kl_limit(p, q, alpha) {
+    if let Some(log_rho) = near_one_log_rho(p, q, alpha, tol)? {
+        return Ok(log_rho.exp_m1() / (alpha - 1.0));
+    }
+    if (alpha - 1.0).abs() < 1e-12 {
         return kl_divergence(p, q, tol);
     }
     let log_rho = log_rho_alpha(p, q, alpha, tol)?;

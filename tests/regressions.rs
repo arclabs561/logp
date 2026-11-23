@@ -178,3 +178,21 @@ fn sparse_divergences_stay_finite_just_below_order_one() {
         assert!(logp::tsallis_divergence(&p, &q, order, 1e-12).is_err());
     }
 }
+
+#[test]
+fn a_single_ulp_of_missing_support_keeps_its_divergence() {
+    let alpha = f64::from_bits(1.0f64.to_bits() - 1);
+    let missing = 1.0 - alpha;
+    for n in [2, 4, 8, 16, 32] {
+        let mut q = vec![1.0 / n as f64; n];
+        q.push(0.0);
+        let mut p = q.clone();
+        p[n - 1] -= missing;
+        p[n] = missing;
+        // The missing mass equals 1-alpha. A 110-digit reference gives
+        // Renyi 1.0 and Tsallis 0.9999999999999999 at binary64 precision.
+        for d in [logp::renyi_divergence, logp::tsallis_divergence] {
+            assert!((d(&p, &q, alpha, 1e-14).unwrap() - 1.0).abs() < 1e-14);
+        }
+    }
+}
